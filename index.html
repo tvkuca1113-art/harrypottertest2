@@ -132,6 +132,12 @@ body.touch.playing #touch { display:block; }
 /* auto-run: two big pads. manual: d-pad left, jump/duck right */
 body.autorun #tLeft, body.autorun #tRight { display:none; }
 body:not(.autorun) #tBrake { display:none; }
+#tPatronus { display:none; background:rgba(190,235,255,.28); border-color:rgba(190,235,255,.85); color:#eaf8ff; }
+body.patronus #tPatronus { display:flex; animation:pulse 1s infinite alternate; }
+@keyframes pulse { from { box-shadow:0 0 0 0 rgba(190,235,255,.5); } to { box-shadow:0 0 0 10px rgba(190,235,255,0); } }
+.goal { display:block; }
+.goal.ok { color:#8fd07a; }
+.goal.no { color:#8f84a8; }
 </style>
 </head>
 <body>
@@ -152,6 +158,7 @@ body:not(.autorun) #tBrake { display:none; }
     <div class="tbtn" id="tBrake" data-act="left"  aria-label="Bremsen">‹‹</div>
     <div class="tbtn" id="tDuck"  data-act="duck"  aria-label="Ducken">▼</div>
     <div class="tbtn" id="tJump"  data-act="jump"  aria-label="Springen">▲</div>
+    <div class="tbtn" id="tPatronus" data-act="patronus" aria-label="Patronus rufen">✦</div>
   </div>
 
   <div id="portraitHint">Für das beste Erlebnis drehe dein Gerät ins Querformat</div>
@@ -161,6 +168,8 @@ body:not(.autorun) #tBrake { display:none; }
     <h1>Flucht vor Voldemort</h1>
     <p>Voldemort jagt Harry durch Hogwarts und schleudert dir seine Zaubersprüche hinterher.
        Du kannst nicht kämpfen – nur laufen, springen und dich ducken. Erreiche das Portal, bevor er dich einholt!</p>
+    <p class="small">Sammle Schnatze, um deinen <b>Patronus</b> zu laden – der Hirsch treibt Voldemort zurück.
+       Der <b>Zeitumkehrer</b> auf der oberen Route dreht einen Fehler zurück, statt dich ein Leben zu kosten.</p>
     <div class="sub">Schwierigkeit</div>
     <div class="row" id="diffRow">
       <button class="opt" data-diff="leicht" type="button">Leicht</button>
@@ -172,7 +181,10 @@ body:not(.autorun) #tBrake { display:none; }
       <button class="opt tog" id="btnLayout" type="button">Tasten: Unten</button>
       <button class="opt tog" id="btnFull2" type="button">Vollbild</button>
     </div>
-    <button class="btn" id="btnStart" type="button">Spiel starten</button>
+    <div class="row">
+      <button class="btn" id="btnStart" type="button">Spiel starten</button>
+      <button class="btn ghost" id="btnEndless" type="button">Endlos-Flucht</button>
+    </div>
     <div class="sub">Steuerung</div>
     <div class="keys" id="hintKeys">← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause</div>
     <div class="keys" id="hintTouch">Nutze die Tasten unten auf dem Bildschirm</div>
@@ -204,6 +216,7 @@ body:not(.autorun) #tBrake { display:none; }
   <div class="screen" id="screenLevel">
     <h2>Level geschafft!</h2>
     <div class="stats" id="levelStats"></div>
+    <div class="keys" id="levelGoals"></div>
     <button class="btn" id="btnNext" type="button">Weiter</button>
   </div>
 
@@ -266,6 +279,22 @@ var CONFIG = {
   CORNER_NUDGE: 5,           // Celeste-style corner correction, in pixels
   STOMP_BOUNCE: -4.6,
   INVULN_TIME: 1.6,          // seconds of invincibility after a hit
+
+  // --- Patronus (the one thing Harry CAN cast: pure defence) -------------
+  PATRONUS_PER_COIN: 0.07,
+  PATRONUS_PER_STAR: 0.2,
+  PATRONUS_PER_STOMP: 0.06,
+  PATRONUS_PER_MISS: 0.05,
+  PATRONUS_TIME: 4.5,        // seconds the stag runs beside Harry
+  PATRONUS_PUSH: 1.6,        // Voldemort is thrown back this × the chase gap
+
+  // --- Zeitumkehrer -----------------------------------------------------
+  REWIND_SECONDS: 1.5,       // how far back a death is undone
+  SNAPSHOT_EVERY: 3,         // frames between recorded states
+
+  // --- endless mode -----------------------------------------------------
+  ENDLESS_COLS: 3000,
+  ENDLESS_RAMP: 7000,        // px of distance that doubles the pressure
 
   // --- game feel --------------------------------------------------------
   HITSTOP_STOMP: 0.06,       // freeze frames sell the impact
@@ -730,6 +759,37 @@ var FROG_ROWS = [
   'ccc.....ccc'
 ];
 
+var PAL_PATRONUS = { w: '#dff2ff', h: '#ffffff' };
+var PATRONUS_ROWS = [
+  '.......w.......w....',
+  '......w.w.....w.w...',
+  '.......www...www....',
+  '.........wwwww......',
+  '........wwhwwww.....',
+  '........wwwwwww.....',
+  '....wwwwwwwwwwwww...',
+  '...wwwwwwwwwwwwwww..',
+  '...wwwwwwwwwwwwwww..',
+  '...wwwwwwwwwwwwwww..',
+  '...ww..ww...ww..ww..',
+  '...w....w...w....w..',
+  '...w....w...w....w..',
+  '..ww....ww.ww....ww.'
+];
+
+var PAL_TURNER = { g: '#e8c24c', s: '#fff0b0', d: '#8a6a20' };
+var TURNER_ROWS = [
+  '..ggggg..',
+  '.g.....g.',
+  'g.sssss.g',
+  'g..sss..g',
+  'g...s...g',
+  'g..sss..g',
+  'g.sssss.g',
+  '.g.....g.',
+  '..ggggg..'
+];
+
 // sprite registry: every entry gets a right- and left-facing canvas
 var SPR = {};
 function reg(name, rows, pal) {
@@ -752,6 +812,8 @@ function initSprites() {
   reg('nimbus', NIMBUS_ROWS, PAL_NIMBUS);
   reg('cloak', CLOAK_ROWS, PAL_CLOAK);
   reg('frog', FROG_ROWS, PAL_FROG);
+  reg('patronus', PATRONUS_ROWS, PAL_PATRONUS);
+  reg('turner', TURNER_ROWS, PAL_TURNER);
 }
 
 var HARRY_RUN_CYCLE = ['harry_run1', 'harry_run2', 'harry_run3', 'harry_run4'];
@@ -842,6 +904,16 @@ var Audio2 = {
   spellHit: function () { this.noiseBurst(0.22, 0.24, 2200, 200, 1.2); },
   land: function () { this.noiseBurst(0.07, 0.09, 700, 200, 1.5); },
   nearMiss: function () { this.tone('sine', 1200, 1800, 0.09, 0.14); this.tone('sine', 1800, 2400, 0.07, 0.09, 0.05); },
+  patronus: function () {
+    var n = [523.25, 659.25, 783.99, 1046.5, 1318.5], i;
+    for (i = 0; i < n.length; i++) this.tone('triangle', n[i], n[i] * 1.5, 0.5, 0.22, i * 0.06);
+    this.noiseBurst(0.7, 0.16, 400, 5000, 1.2);
+  },
+  rewind: function () {
+    this.tone('sine', 1400, 300, 0.55, 0.2);
+    this.tone('triangle', 700, 180, 0.55, 0.14, 0.04);
+    this.noiseBurst(0.5, 0.1, 3000, 300, 2);
+  },
   combo: function (n) { var f = 660 * Math.pow(1.16, n); this.tone('square', f, f, 0.07, 0.16); },
   portal: function () { this.tone('sine', 300, 1200, 0.4, 0.16); this.tone('sine', 450, 1800, 0.4, 0.1, 0.05); },
   fanfare: function () {
@@ -1048,8 +1120,9 @@ var LEVELS = [
       [139, 21], [140, 21], [149, 20], [150, 20], [174, 20], [175, 20], [190, 21], [191, 21],
       [195, 19], [198, 17], [199, 17], [203, 21], [204, 21], [208, 19]
     ],
-    stars: [[198, 16], [11, 18], [115, 18]],
+    stars: [[11, 18], [115, 18], [208, 18]],
     power: [
+      { x: 198, y: 17, t: 'turner' },
       { x: 48, y: 22, t: 'cloak' },
       { x: 75, y: 22, t: 'nimbus' },
       { x: 118, y: 22, t: 'frog' },
@@ -1062,7 +1135,6 @@ var LEVELS = [
       { t: 'tod', x: 131, y: 24, r: 6 },
       { t: 'tod', x: 155, y: 24, r: 9 },
       { t: 'tod', x: 180, y: 24, r: 8 },
-      { t: 'tod', x: 193, y: 24, r: 8 },
       { t: 'dem', x: 31, y: 20, r: 2 },
       { t: 'dem', x: 71, y: 19, r: 2 },
       { t: 'dem', x: 88, y: 20, r: 2 },
@@ -1106,6 +1178,7 @@ var game = {
   levelIndex: 0,
   score: 0,
   highscore: 0,          // session only – no localStorage on purpose
+  dist: 0, distScored: 0, lastGoals: 0,
   lives: CONFIG.MAX_LIVES,
   maxLives: CONFIG.MAX_LIVES,
   time: 0,
@@ -1117,7 +1190,13 @@ var game = {
   voldGap: 170,          // recomputed from the view width on every resize
   banner: 0,             // level title card timer
   diff: 'normal',
-  autoRun: false
+  autoRun: false,
+  patronus: 0,           // 0..1 charge, filled by collecting
+  patronusT: 0,          // seconds the stag is out
+  endless: false,
+  endlessBest: 0,
+  goals: null,           // three per level, checked on arrival
+  stat: { coins: 0, hits: 0, stomps: 0 }
 };
 function diffData() { return DIFFICULTY[game.diff] || DIFFICULTY.normal; }
 
@@ -1131,8 +1210,44 @@ var player = {
   onGround: false, face: 1, ducking: false,
   coyote: 0, buffer: 0, jumpHeld: false, animT: 0,
   invuln: 0, nimbus: 0, cloak: 0, rider: null,
-  safeX: 0, safeY: 0, safeT: 0, trailT: 0
+  safeX: 0, safeY: 0, safeT: 0, trailT: 0,
+  turner: 0,             // Zeitumkehrer in the pocket (0 or 1)
+  corner: true
 };
+
+// --- ZEITUMKEHRER: a short ring buffer of world snapshots -----------------
+var REWIND_LEN = 40;
+var rewind = { buf: [], head: 0, count: 0, tick: 0, fx: 0 };
+(function initRewind() {
+  for (var i = 0; i < REWIND_LEN; i++)
+    rewind.buf.push({ x: 0, y: 0, vx: 0, vy: 0, h: 14, duck: false, vx2: 0 });
+})();
+function recordSnapshot() {
+  rewind.tick++;
+  if (rewind.tick < CONFIG.SNAPSHOT_EVERY) return;
+  rewind.tick = 0;
+  var s = rewind.buf[rewind.head];
+  s.x = player.x; s.y = player.y; s.vx = player.vx; s.vy = player.vy;
+  s.h = player.h; s.duck = player.ducking; s.vx2 = vold.x;
+  rewind.head = (rewind.head + 1) % REWIND_LEN;
+  if (rewind.count < REWIND_LEN) rewind.count++;
+}
+function clearSnapshots() { rewind.count = 0; rewind.head = 0; rewind.tick = 0; rewind.fx = 0; }
+// steps back a fixed number of recorded frames, clamped to what we have
+function doRewind() {
+  var back = Math.min(rewind.count - 1,
+    Math.round(CONFIG.REWIND_SECONDS * 60 / CONFIG.SNAPSHOT_EVERY));
+  if (back < 1) return false;
+  var idx = (rewind.head - 1 - back + REWIND_LEN * 2) % REWIND_LEN;
+  var s = rewind.buf[idx];
+  player.x = s.x; player.y = s.y; player.vx = s.vx; player.vy = s.vy;
+  player.h = s.h; player.ducking = s.duck; player.rider = null;
+  vold.x = Math.min(s.vx2, player.x - game.voldGap * 0.9);
+  player.invuln = CONFIG.INVULN_TIME;
+  rewind.count = 0; rewind.head = 0;
+  rewind.fx = 0.9;
+  return true;
+}
 
 var vold = { x: 0, y: 120, bob: 0, cast: 0, next: 0, type: 'avada' };
 
@@ -1192,8 +1307,9 @@ function fillRect(tx, ty, tw, th) {
   }
 }
 
-function buildLevel(idx) {
-  var d = LEVELS[idx], i, a;
+function buildLevel(idx) { buildLevelFrom(LEVELS[idx]); }
+function buildLevelFrom(d) {
+  var i, a;
   level.data = d;
   level.cols = d.cols;
   level.widthPx = d.cols * T;
@@ -1241,12 +1357,12 @@ function buildLevel(idx) {
     if (a.t === 'tod') {
       level.foes.push({
         t: 'tod', x: a.x * T, y: a.y * T - 16, w: 12, h: 16,
-        x0: a.x * T, x1: (a.x + a.r) * T, dir: 1, alive: true, anim: 0, dead: 0
+        x0: a.x * T, x1: (a.x + a.r) * T, dir: 1, alive: true, anim: 0, dead: 0, stun: 0
       });
     } else {
       level.foes.push({
         t: 'dem', x: a.x * T + 1, y: a.y * T - 9, w: 14, h: 18,
-        y0: (a.y - a.r) * T - 9, y1: (a.y + a.r) * T - 9, dir: 1, alive: true, anim: rnd(0, 6.28), dead: 0
+        y0: (a.y - a.r) * T - 9, y1: (a.y + a.r) * T - 9, dir: 1, alive: true, anim: rnd(0, 6.28), dead: 0, stun: 0
       });
     }
   }
@@ -1307,7 +1423,8 @@ function resetPlayer(fullLevel) {
   player.coyote = 0; player.buffer = 0; player.animT = 0;
   player.invuln = 0; player.rider = null;
   player.safeX = player.x; player.safeY = player.y; player.safeT = 0;
-  if (fullLevel) { player.nimbus = 0; player.cloak = 0; }
+  clearSnapshots();
+  if (fullLevel) { player.nimbus = 0; player.cloak = 0; player.turner = 0; }
 }
 
 function canStand() {
@@ -1417,6 +1534,18 @@ function updatePlayer(dt) {
 
 function loseLife(pit) {
   if (game.state !== ST.PLAY) return;
+  // a Zeitumkehrer undoes the mistake instead of costing a life
+  if (player.turner > 0 && doRewind()) {
+    player.turner--;
+    game.freeze = 0.12;
+    game.shake = 0.25;
+    game.combo = 0; game.comboT = 0;
+    spawnFloater('Zeitumkehrer!', player.x - 20, player.y - 24, '#ffe680');
+    burst(player.x + 5, player.y + 7, '#ffe680', 16, 2.6);
+    Audio2.rewind();
+    return;
+  }
+  game.stat.hits++;
   game.lives--;
   game.shake = 0.45;
   game.freeze = CONFIG.HITSTOP_HURT;
@@ -1436,8 +1565,42 @@ function loseLife(pit) {
   vold.x = Math.min(vold.x, player.x - game.voldGap * 0.95);
 }
 
+// --- PATRONUS -----------------------------------------------------------
+// Harry still cannot attack: the stag only drives things away from him.
+function castPatronus() {
+  if (game.state !== ST.PLAY || game.patronus < 1 || game.patronusT > 0) return;
+  game.patronus = 0;
+  game.patronusT = CONFIG.PATRONUS_TIME;
+  vold.x = player.x - game.voldGap * CONFIG.PATRONUS_PUSH;
+  vold.cast = 0;
+  vold.next = Math.max(vold.next, CONFIG.PATRONUS_TIME * 0.8);
+  var i;
+  for (i = 0; i < spells.length; i++) if (spells[i].on) {
+    burst(spells[i].x + 4, spells[i].y + 4, '#dff2ff', 8, 2.2);
+    spells[i].on = false;
+  }
+  for (i = 0; i < level.foes.length; i++) {
+    var f = level.foes[i];
+    if (!f.alive || Math.abs(f.x - player.x) > view.w) continue;
+    f.stun = CONFIG.PATRONUS_TIME;
+    burst(f.x + 6, f.y + 8, '#bfe9ff', 6, 1.6);
+  }
+  game.shake = Math.max(game.shake, 0.3);
+  spawnFloater('Erwartungsvoller Patronus!', player.x - 40, player.y - 26, '#dff2ff');
+  Audio2.patronus();
+}
+function chargePatronus(amount) {
+  if (game.patronusT > 0) return;
+  var was = game.patronus;
+  game.patronus = clamp(game.patronus + amount, 0, 1);
+  if (was < 1 && game.patronus >= 1) {
+    spawnFloater('Patronus bereit!', player.x - 24, player.y - 24, '#bfe9ff');
+    Audio2.star();
+  }
+}
+
 function hurtPlayer() {
-  if (player.invuln > 0 || player.cloak > 0 || game.state !== ST.PLAY) return;
+  if (player.invuln > 0 || player.cloak > 0 || game.patronusT > 0 || game.state !== ST.PLAY) return;
   loseLife(false);
 }
 
@@ -1493,11 +1656,18 @@ function updateVoldemort(dt) {
   var C = CONFIG, lv = game.levelIndex;
   var gap = player.x - vold.x;
 
+  if (game.patronusT > 0) {                    // the stag holds him off entirely
+    vold.bob += dt * 2.2;
+    vold.y += (clamp(player.y - 10, 14, WORLD_H - 60) - vold.y) * Math.min(1, dt * 2.4);
+    vold.cast = 0;
+    return;
+  }
   var d = diffData();
   var scale = game.voldGap / C.VOLD_GAP_REF;   // keeps the reaction time device-independent
   var speed = C.VOLD_SPEED[lv] + C.VOLD_RAMP * (game.time / 10);
   if (Math.abs(player.vx) < 0.6) speed += C.VOLD_IDLE_BOOST * d.idleMul;
   speed *= d.voldMul * scale;
+  if (game.endless) speed *= 1 + player.x / CONFIG.ENDLESS_RAMP;   // the run gets meaner
   if (gap < 60 * scale) speed *= 0.35;       // he savours the moment – a fair last chance
   vold.x += speed * dt;
   var minX = player.x - game.voldGap;
@@ -1567,12 +1737,13 @@ function updateSpells(dt) {
       if (dv < s.md) s.md = dv;
     } else if (!s.scored && s.x > player.x + player.w + 2 && s.md < CONFIG.NEAR_MISS_DIST && s.md > 0) {
       s.scored = true;
+      chargePatronus(CONFIG.PATRONUS_PER_MISS);
       addScore(CONFIG.PTS_NEAR_MISS, player.x, player.y - 12, true);
       spawnFloater('Knapp!', player.x - 6, player.y - 22, '#8ff0b4');
       Audio2.nearMiss();
     }
 
-    if (player.cloak <= 0 && player.invuln <= 0 && aabb(s, player)) {
+    if (player.cloak <= 0 && player.invuln <= 0 && game.patronusT <= 0 && aabb(s, player)) {
       s.on = false;
       burst(s.x + 4, s.y + 4, '#ffd0a0', 12, 2.4);
       Audio2.spellHit();
@@ -1600,6 +1771,12 @@ function updateFoes(dt) {
     var f = level.foes[i];
     if (!f.alive) { if (f.dead > 0) { f.dead -= dt; f.y += 1.4; } continue; }
     if (f.x < cam.x - 120 || f.x > cam.x + view.w + 140) continue;   // sleep off-screen
+    if (f.stun > 0) {
+      f.stun -= dt;
+      if (f.t === 'dem') f.y -= 0.9;                 // Dementoren flee upwards
+      if (Math.random() < 0.2) spawnParticle(f.x + 6, f.y + 8, rnd(-.3, .3), rnd(-.5, 0), 0.4, '#bfe9ff', 1, 0);
+      continue;
+    }
 
     if (f.t === 'tod') {
       f.anim += dt * 5;
@@ -1621,6 +1798,8 @@ function updateFoes(dt) {
     if (f.t === 'tod' && player.vy > 0.6 && (player.y + player.h) - f.y < 10) {
       f.alive = false; f.dead = 0.6;
       player.vy = CONFIG.STOMP_BOUNCE;
+      game.stat.stomps++;
+      chargePatronus(CONFIG.PATRONUS_PER_STOMP);
       addScore(CONFIG.PTS_TODESSER, f.x + 6, f.y, true);
       Audio2.stomp();
       game.freeze = CONFIG.HITSTOP_STOMP;
@@ -1656,6 +1835,8 @@ function updateItems(dt) {
     if (player.x < c.x + c.w && player.x + player.w > c.x &&
         player.y < c.y + 12 && player.y + player.h > c.y - 4) {
       c.got = true;
+      game.stat.coins++;
+      chargePatronus(CONFIG.PATRONUS_PER_COIN);
       addScore(CONFIG.PTS_SCHNATZ, c.x - 4, c.y - 8, true);
       if (game.combo < 2) spawnFloater('Goldener Schnatz', c.x - 22, c.y - 16, '#ffe680');
       Audio2.coin();
@@ -1668,6 +1849,7 @@ function updateItems(dt) {
     if (Math.abs(c.x - player.x) > 40) continue;
     if (aabb(c, player)) {
       c.got = true;
+      chargePatronus(CONFIG.PATRONUS_PER_STAR);
       addScore(CONFIG.PTS_STAR, c.x - 4, c.y - 10, true);
       spawnFloater('Zauberstab-Stern', c.x - 26, c.y - 20, '#ffd23c');
       Audio2.star();
@@ -1683,8 +1865,13 @@ function updateItems(dt) {
       Audio2.power();
       if (c.t === 'nimbus') { player.nimbus = CONFIG.NIMBUS_TIME; spawnFloater('Nimbus 2000', c.x - 12, c.y - 10, '#ffd76a'); burst(c.x + 6, c.y + 6, '#ffd76a', 12, 2.2); }
       else if (c.t === 'cloak') { player.cloak = CONFIG.CLOAK_TIME; spawnFloater('Tarnumhang', c.x - 10, c.y - 10, '#bcd8f8'); burst(c.x + 6, c.y + 6, '#bcd8f8', 12, 2.2); }
+      else if (c.t === 'turner') {
+        player.turner = 1;
+        spawnFloater('Zeitumkehrer', c.x - 14, c.y - 12, '#ffe680');
+        burst(c.x + 6, c.y + 6, '#ffe680', 16, 2.6);
+      }
       else {
-        if (game.lives < CONFIG.MAX_LIVES) game.lives++;
+        if (game.lives < game.maxLives) game.lives++;
         else addScore(CONFIG.PTS_SCHNATZ, c.x, c.y - 8);
         spawnFloater('Schokofrosch', c.x - 12, c.y - 10, '#e8a86a');
         burst(c.x + 6, c.y + 6, '#e8a86a', 12, 2.2);
@@ -1717,6 +1904,160 @@ function updateParticles(dt) {
   }
 }
 
+// --- LEVEL GOALS --------------------------------------------------------
+// Three small challenges per level, in the spirit of Mario Run's coloured
+// coins: they give a reason to take the risky upper route.
+var GOAL_BONUS = 250;
+function makeGoals(d, idx) {
+  var need = Math.max(6, Math.round(d.coins.length * 0.6));
+  var fast = Math.round(CONFIG.PAR_TIME[idx] * 0.5);
+  return [
+    { kind: 'coins', need: need, txt: 'Sammle ' + need + ' Schnatze', done: false },
+    { kind: 'nohit', need: 0, txt: 'Ohne Treffer durchkommen', done: false },
+    { kind: 'time', need: fast, txt: 'Schneller als ' + fast + ' Sekunden', done: false }
+  ];
+}
+function checkGoals() {
+  if (!game.goals) return 0;
+  var n = 0;
+  for (var i = 0; i < game.goals.length; i++) {
+    var g = game.goals[i];
+    if (g.kind === 'coins') g.done = game.stat.coins >= g.need;
+    else if (g.kind === 'nohit') g.done = game.stat.hits === 0;
+    else g.done = game.time <= g.need;
+    if (g.done) n++;
+  }
+  return n;
+}
+
+// --- ENDLESS MODE -------------------------------------------------------
+// The same layout rules as the hand-made levels, generated on the fly, so
+// every run is new but every jump stays fair.
+function makeEndlessLevel(seed) {
+  var R = seeded(seed >>> 0);
+  var cols = CONFIG.ENDLESS_COLS;
+  var themes = ['castle', 'forest', 'ministry'];
+  var theme = themes[Math.abs(seed) % 3];
+  var g = new Uint8Array(cols * ROWS);
+  function set(x, y, w, h) {
+    for (var yy = y; yy < y + h; yy++) for (var xx = x; xx < x + w; xx++)
+      if (xx >= 0 && xx < cols && yy >= 0 && yy < ROWS) g[yy * cols + xx] = 1;
+  }
+  function sol(x, y) { return (x < 0 || x >= cols || y < 0 || y >= ROWS) ? 0 : g[y * cols + x]; }
+
+  var R_STONE = GROUND_ROW - 1, R_LOW = GROUND_ROW - 2, R_HIGH = GROUND_ROW - 4;
+  var R_CL = GROUND_ROW - 3, R_CH = GROUND_ROW - 5, R_SKY = GROUND_ROW - 6;
+
+  // ---- ground with pits (2–3 tiles, 3-tile ones get a stepping stone) ----
+  var ground = [], blocks = [], coins = [], stars = [], power = [], foes = [], hazards = [];
+  var x = 0, first = 30;
+  ground.push([0, first]); set(0, GROUND_ROW, first, ROWS - GROUND_ROW);
+  x = first;
+  while (x < cols - 40) {
+    var gap = 2 + ((R() * 2) | 0);
+    if (gap === 3) { blocks.push([x + 1, R_STONE, 1, 1]); set(x + 1, R_STONE, 1, 1); }
+    x += gap;
+    var len = 15 + ((R() * 20) | 0);
+    if (x + len > cols - 6) len = cols - 6 - x;
+    if (len < 10) break;
+    ground.push([x, len]); set(x, GROUND_ROW, len, ROWS - GROUND_ROW);
+    x += len;
+  }
+  if (x < cols) { ground.push([x, cols - x]); set(x, GROUND_ROW, cols - x, ROWS - GROUND_ROW); }
+
+  // ---- Teufelsschlingen first, each reserving a clear jump lane ----
+  var reserved = {};
+  for (var t = 40; t < cols - 20; t += 26 + ((R() * 22) | 0)) {
+    var ok = true;
+    for (var d2 = -6; d2 <= 7 && ok; d2++) if (!sol(t + d2, GROUND_ROW)) ok = false;
+    if (!ok) continue;
+    hazards.push(t);
+    for (var d3 = -5; d3 <= 2; d3++) reserved[t + d3] = 1;
+  }
+  function lane(a, b) { for (var q = a; q <= b; q++) if (reserved[q]) return true; return false; }
+
+  // ---- platforms, keeping 5 tiles of headroom before every ledge ----
+  for (var s2 = 0; s2 < ground.length; s2++) {
+    var from = ground[s2][0] + (s2 === 0 ? 6 : 3);
+    var to = ground[s2][0] + ground[s2][1] - 6;
+    var px = from;
+    while (px + 3 <= to) {
+      if (lane(px - 1, px + 9)) { while (px < to && lane(px - 1, px + 9)) px++; continue; }
+      blocks.push([px, R_LOW, 4, 1]); set(px, R_LOW, 4, 1);
+      coins.push([px + 1, R_CL], [px + 2, R_CL]);
+      if (px + 7 <= to && R() < 0.75) {
+        blocks.push([px + 5, R_HIGH, 3, 1]); set(px + 5, R_HIGH, 3, 1);
+        coins.push([px + 6, R_CH]);
+        if (px + 10 <= to && R() < 0.55) {
+          blocks.push([px + 8, R_SKY, 3, 1]); set(px + 8, R_SKY, 3, 1);
+          coins.push([px + 9, R_SKY - 1], [px + 10, R_SKY - 1]);
+          if (R() < 0.45) stars.push([px + 9, R_SKY - 2]);
+          px += 3;
+        }
+        px += 10;
+      } else px += 6;
+      px += 2;
+    }
+  }
+
+  // ---- coins arcing over each pit ----
+  for (var i2 = 0; i2 < ground.length - 1; i2++) {
+    var a2 = ground[i2][0] + ground[i2][1], b2 = ground[i2 + 1][0];
+    coins.push([Math.floor((a2 + b2 - 1) / 2), R_HIGH]);
+  }
+
+  // ---- power-ups and enemies on clean ground ----
+  function openGround(tt, span) {
+    for (var d = -span; d <= span; d++) {
+      if (!sol(tt + d, GROUND_ROW)) return false;
+      for (var r = R_HIGH; r <= R_STONE; r++) if (sol(tt + d, r)) return false;
+    }
+    return true;
+  }
+  function walkable(tt, r) {
+    for (var d = -3; d <= r + 3; d++) if (!sol(tt + d, GROUND_ROW)) return false;
+    for (var e = 0; e <= r; e++) if (sol(tt + e, R_STONE) || sol(tt + e, R_LOW)) return false;
+    return true;
+  }
+  var kinds = ['nimbus', 'cloak', 'frog', 'frog', 'cloak'];
+  var pIdx = 0;
+  for (var pt = 60; pt < cols - 30; pt += 90 + ((R() * 60) | 0)) {
+    var found = -1;
+    for (var o = 0; o < 20 && found < 0; o++) {
+      if (openGround(pt + o, 1)) found = pt + o;
+      else if (openGround(pt - o, 1)) found = pt - o;
+    }
+    if (found < 0) continue;
+    var kind = (pIdx % 9 === 4) ? 'turner' : kinds[pIdx % kinds.length];
+    power.push({ x: found, y: R_LOW, t: kind });
+    pIdx++;
+  }
+  for (var ft = 34; ft < cols - 24; ft += 22 + ((R() * 24) | 0)) {
+    if (R() < 0.55) {
+      var f2 = -1;
+      for (var o2 = 0; o2 < 12 && f2 < 0; o2++) { if (walkable(ft + o2, 3)) f2 = ft + o2; }
+      if (f2 >= 0) {
+        var rr = 3;
+        while (rr < 8 && walkable(f2, rr + 1)) rr++;
+        foes.push({ t: 'tod', x: f2, y: GROUND_ROW, r: rr });
+      }
+    } else {
+      var row = GROUND_ROW - 5 + ((R() * 3) | 0), clear = true;
+      for (var dd = -1; dd <= 1 && clear; dd++) {
+        if (!sol(ft + dd, GROUND_ROW)) clear = false;
+        for (var yy2 = row - 3; yy2 <= row + 3; yy2++) if (sol(ft + dd, yy2)) { clear = false; break; }
+      }
+      if (clear) foes.push({ t: 'dem', x: ft, y: row, r: 2 });
+    }
+  }
+
+  return {
+    name: 'Endlos-Flucht', theme: theme, cols: cols, portal: cols - 4,
+    ground: ground, blocks: blocks, movers: [], hazards: hazards,
+    coins: coins, stars: stars, power: power, foes: foes
+  };
+}
+
 // --- GAME FLOW ----------------------------------------------------------
 function clearTransients() {
   var i;
@@ -1725,16 +2066,48 @@ function clearTransients() {
   for (i = 0; i < floaters.length; i++) floaters[i].on = false;
 }
 
+var endlessSeed = 1;
+function startEndless() {
+  var d = diffData();
+  game.endless = true;
+  game.score = 0;
+  game.maxLives = d.lives;
+  game.lives = d.lives;
+  game.levelIndex = 2;                 // endless uses the hardest spell table
+  game.time = 0;
+  game.shake = 0; game.freeze = 0;
+  game.combo = 0; game.comboT = 0;
+  game.patronus = 0; game.patronusT = 0;
+  game.stat.coins = 0; game.stat.hits = 0; game.stat.stomps = 0;
+  game.goals = null;
+  game.dist = 0; game.distScored = 0;
+  game.banner = 2.6;
+  clearTransients();
+  endlessSeed = (endlessSeed * 1103515245 + 12345) & 0x7fffffff;
+  buildLevelFrom(makeEndlessLevel(endlessSeed));
+  resetPlayer(true);
+  resetVoldemort();
+  cam.x = clamp(player.x - view.w * CONFIG.CAM_LEAD, 0, Math.max(0, level.widthPx - view.w));
+  cam.y = playH() >= WORLD_H ? WORLD_H - playH() : clamp(player.y - playH() * CONFIG.CAM_EYE, 0, WORLD_H - playH());
+  game.state = ST.PLAY;
+  UI.showPauseButton();
+}
+
 function startLevel(idx) {
+  game.endless = false;
+  game.dist = 0; game.distScored = 0;
   game.levelIndex = idx;
   game.time = 0;
   game.shake = 0; game.freeze = 0;
   game.combo = 0; game.comboT = 0;
+  game.patronus = 0; game.patronusT = 0;
+  game.stat.coins = 0; game.stat.hits = 0; game.stat.stomps = 0;
   game.banner = 2.6;
   clearTransients();
   buildLevel(idx);
   resetPlayer(true);
   resetVoldemort();
+  game.goals = makeGoals(level.data, idx);
   cam.x = clamp(player.x - view.w * CONFIG.CAM_LEAD, 0, Math.max(0, level.widthPx - view.w));
   cam.y = playH() >= WORLD_H ? WORLD_H - playH() : clamp(player.y - playH() * CONFIG.CAM_EYE, 0, WORLD_H - playH());
   game.state = ST.PLAY;
@@ -1753,7 +2126,9 @@ function completeLevel() {
   if (game.state !== ST.PLAY) return;
   game.state = ST.LEVELDONE;
   var left = Math.max(0, Math.round(CONFIG.PAR_TIME[game.levelIndex] - game.time));
-  game.lastBonus = left * CONFIG.TIME_BONUS_PER_SEC;
+  var goalsDone = checkGoals();
+  game.lastGoals = goalsDone;
+  game.lastBonus = left * CONFIG.TIME_BONUS_PER_SEC + goalsDone * GOAL_BONUS;
   game.score += game.lastBonus;
   if (game.score > game.highscore) game.highscore = game.score;
   Audio2.portal(); Audio2.fanfare();
@@ -1762,7 +2137,7 @@ function completeLevel() {
 }
 
 function nextLevel() {
-  if (game.levelIndex + 1 >= LEVELS.length) {
+  if (game.endless || game.levelIndex + 1 >= LEVELS.length) {
     game.state = ST.WIN;
     UI.showWin();
   } else {
@@ -1773,7 +2148,9 @@ function nextLevel() {
 
 function endGame() {
   game.state = ST.GAMEOVER;
-  if (game.score > game.highscore) game.highscore = game.score;
+  if (game.endless) {
+    if (game.score > game.endlessBest) game.endlessBest = game.score;
+  } else if (game.score > game.highscore) game.highscore = game.score;
   Audio2.stopMusic();
   Audio2.gameOver();
   UI.showGameOver();
@@ -1792,8 +2169,21 @@ function update(dt) {
   }
   game.time += dt;
   if (game.shake > 0) game.shake -= dt;
+  if (game.endless) {
+    var m = Math.floor(player.x / T);
+    if (m > game.dist) game.dist = m;
+    while (game.distScored < game.dist) { game.distScored++; game.score += 2; }
+    if (game.score > game.endlessBest) game.endlessBest = game.score;
+  }
   if (game.comboT > 0) { game.comboT -= dt; if (game.comboT <= 0) game.combo = 0; }
   if (game.banner > 0) game.banner -= dt;
+  if (rewind.fx > 0) rewind.fx -= dt * 1.6;
+  if (game.patronusT > 0) {
+    game.patronusT -= dt;
+    if (Math.random() < 0.7)
+      spawnParticle(player.x + rnd(-16, 22), player.y + rnd(-4, 14), rnd(-.6, .2), rnd(-.4, .2), 0.6, '#dff2ff', 1, 0);
+  }
+  recordSnapshot();
 
   updateMovers();
   updatePlayer(dt);
@@ -2056,6 +2446,8 @@ function initFX() {
   FX.dementor = makeGlow('rgba(70,150,200,', 15);
   FX.power = makeGlow('rgba(255,246,210,', 12);
   FX.portal = makeGlow('rgba(120,210,255,', 30);
+  FX.patronus = makeGlow('rgba(190,235,255,', 24);
+  FX.turner = makeGlow('rgba(255,225,120,', 14);
   FX.avada = makeGlow('rgba(90,255,80,', 13);
   FX.expelli = makeGlow('rgba(255,90,60,', 11);
   FX.crucio = makeGlow('rgba(170,90,255,', 12);
@@ -2214,8 +2606,10 @@ function drawWorld(t) {
     var pw = level.powers[i];
     if (pw.got || pw.x < cam.x - 24 || pw.x > cam.x + view.w + 24) continue;
     var oy = Math.round(Math.sin(pw.ph) * 2);
-    var img = pw.t === 'nimbus' ? SPR.nimbus : (pw.t === 'cloak' ? SPR.cloak : SPR.frog);
-    drawGlow('power', pw.x + 6, pw.y + oy + img.h / 2, 0.8);
+    var img = pw.t === 'nimbus' ? SPR.nimbus
+            : (pw.t === 'cloak' ? SPR.cloak
+            : (pw.t === 'turner' ? SPR.turner : SPR.frog));
+    drawGlow(pw.t === 'turner' ? 'turner' : 'power', pw.x + 6, pw.y + oy + img.h / 2, 0.85);
     ctx.drawImage(img.r, Math.round(pw.x + (13 - img.w) / 2), Math.round(pw.y + oy));
   }
 
@@ -2251,6 +2645,7 @@ function drawWorld(t) {
   }
 
   drawPlayer();
+  drawPatronus(t);
 
   for (i = 0; i < particles.length; i++) {
     var pt = particles[i]; if (!pt.on) continue;
@@ -2275,6 +2670,16 @@ function drawWorld(t) {
 
   ctx.fillStyle = th.fog;
   ctx.fillRect(0, 0, view.w, view.h);
+
+  if (rewind.fx > 0) {
+    ctx.fillStyle = 'rgba(200,230,255,' + (0.35 * rewind.fx).toFixed(3) + ')';
+    ctx.fillRect(0, 0, view.w, view.h);
+    ctx.fillStyle = 'rgba(255,235,150,0.25)';
+    for (var q = 0; q < 8; q++) {
+      var yy = ((q * 37 + Math.floor(t * 260)) % view.h);
+      ctx.fillRect(0, yy, view.w, 1);
+    }
+  }
 }
 
 function drawVoldemort(t) {
@@ -2299,6 +2704,20 @@ function drawVoldemort(t) {
     ctx.fillStyle = 'rgba(255,240,200,0.35)';
     ctx.fillRect(wx - 1, wy - 1, 2, 2);
   }
+}
+
+// the stag gallops just ahead of Harry while the Patronus lasts
+function drawPatronus(t) {
+  if (game.patronusT <= 0) return;
+  var spr = SPR.patronus;
+  var fade = Math.min(1, game.patronusT / 0.6);
+  var bob = Math.sin(t * 14) * 2;
+  var px = Math.round(player.x + (player.face > 0 ? 14 : -22));
+  var py = Math.round(player.y + player.h - spr.h + 2 + bob);
+  drawGlow('patronus', px + 10, py + 7, 0.7 * fade);
+  ctx.globalAlpha = (0.72 + Math.sin(t * 9) * 0.14) * fade;
+  ctx.drawImage(player.face > 0 ? spr.r : spr.l, px, py);
+  ctx.globalAlpha = 1;
 }
 
 function drawPlayer() {
@@ -2339,11 +2758,11 @@ function drawHUD(t) {
   ctx.fillRect(0, barH, W, 1);
 
   var scoreTxt = 'Punkte: ' + game.score;
-  var hsTxt = 'Highscore: ' + game.highscore;
+  var hsTxt = game.endless ? 'Bestwert: ' + game.endlessBest : 'Highscore: ' + game.highscore;
   var nameTxt = level.data.name;
   // narrow phone views drop the long labels instead of letting them collide
   var roomy = textWidth(scoreTxt, S) + textWidth(hsTxt, S) + textWidth(nameTxt, S) + 6 * pad < W;
-  if (!roomy) hsTxt = 'HS: ' + game.highscore;
+  if (!roomy) hsTxt = (game.endless ? 'Best: ' : 'HS: ') + (game.endless ? game.endlessBest : game.highscore);
 
   drawText(ctx, scoreTxt, pad, 3 * S, '#ffe680', S, '#000');
   drawText(ctx, hsTxt, W - pad - textWidth(hsTxt, S), 3 * S, '#bfe9ff', S, '#000');
@@ -2369,16 +2788,21 @@ function drawHUD(t) {
     ctx.fillRect(0, 0, W, view.h);
   }
 
-  // route progress: Harry and Voldemort against the portal
+  // route progress (story mode) or distance run (endless)
   var py = barH + 3 * S, pw = W - pad * 2;
-  var goal = level.portal.x;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(pad, py, pw, 3 * S);
-  ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(pad, py, pw, 3 * S);
-  var fh = clamp(player.x / goal, 0, 1), fv = clamp(vold.x / goal, 0, 1);
-  ctx.fillStyle = 'rgba(255,214,100,0.35)'; ctx.fillRect(pad, py, Math.round(pw * fh), 3 * S);
-  ctx.fillStyle = '#8a2b8a'; ctx.fillRect(pad + Math.round(pw * fv) - S, py - S, 2 * S, 5 * S);
-  ctx.fillStyle = '#ffd964'; ctx.fillRect(pad + Math.round(pw * fh) - S, py - S, 2 * S, 5 * S);
-  ctx.fillStyle = '#7fe0ff'; ctx.fillRect(pad + pw - S, py - 2 * S, 2 * S, 7 * S);
+  if (game.endless) {
+    var dTxt = 'Strecke: ' + game.dist + ' m';
+    drawText(ctx, dTxt, W / 2 - textWidth(dTxt, S) / 2, py - S, '#8ff0b4', S, '#000');
+  } else {
+    var goal = level.portal.x;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(pad, py, pw, 3 * S);
+    ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(pad, py, pw, 3 * S);
+    var fh = clamp(player.x / goal, 0, 1), fv = clamp(vold.x / goal, 0, 1);
+    ctx.fillStyle = 'rgba(255,214,100,0.35)'; ctx.fillRect(pad, py, Math.round(pw * fh), 3 * S);
+    ctx.fillStyle = '#8a2b8a'; ctx.fillRect(pad + Math.round(pw * fv) - S, py - S, 2 * S, 5 * S);
+    ctx.fillStyle = '#ffd964'; ctx.fillRect(pad + Math.round(pw * fh) - S, py - S, 2 * S, 5 * S);
+    ctx.fillStyle = '#7fe0ff'; ctx.fillRect(pad + pw - S, py - 2 * S, 2 * S, 7 * S);
+  }
 
   // level title card right after the start (keeps the top bar clear on phones)
   if (game.banner > 0 && !roomy) {
@@ -2397,7 +2821,20 @@ function drawHUD(t) {
   if (player.cloak > 0) {
     drawText(ctx, 'Tarnumhang', pad, yy, '#bcd8f8', S, '#000');
     drawBar(pad + textWidth('Tarnumhang', S) + 4 * S, yy + S, 26 * S, 4 * S, player.cloak / CONFIG.CLOAK_TIME, '#bcd8f8');
+    yy += 9 * S;
   }
+
+  // Patronus charge, plus the Zeitumkehrer if Harry carries one
+  var ready = game.patronus >= 1, active = game.patronusT > 0;
+  var pLbl = active ? 'Patronus!' : 'Patronus';
+  var pCol = active ? '#ffffff' : (ready ? '#dff2ff' : '#7f8ca6');
+  drawText(ctx, pLbl, pad, yy, pCol, S, '#000');
+  var pbx = pad + textWidth('Patronus', S) + 4 * S;
+  drawBar(pbx, yy + S, 26 * S, 4 * S,
+    active ? game.patronusT / CONFIG.PATRONUS_TIME : game.patronus,
+    active ? '#ffffff' : (ready && Math.floor(t * 4) % 2 === 0 ? '#ffe680' : pCol));
+  if (player.turner > 0)
+    ctx.drawImage(SPR.turner.r, pbx + 29 * S, yy - S, 9 * S, 9 * S);
 
   // combo chain
   if (game.combo > 1) {
@@ -2461,6 +2898,8 @@ window.addEventListener('keydown', function (e) {
   else if (c === 'ArrowDown' || c === 'KeyS') keyState.duck = true;
   else if (c === 'KeyP' || c === 'Escape') togglePause();
   else if (c === 'KeyM') toggleSound();
+  else if (c === 'KeyE' || c === 'ShiftLeft' || c === 'ShiftRight') castPatronus();
+  else if (c === 'KeyF') toggleFullscreen();
   else if (c === 'Enter') {
     if (game.state === ST.MENU) startGameFromMenu();
     else if (game.state === ST.LEVELDONE) nextLevel();
@@ -2488,7 +2927,8 @@ var tbtns = [
   { el: document.getElementById('tRight'), act: 'right', rect: null },
   { el: document.getElementById('tBrake'), act: 'left', rect: null },
   { el: document.getElementById('tDuck'), act: 'duck', rect: null },
-  { el: document.getElementById('tJump'), act: 'jump', rect: null }
+  { el: document.getElementById('tJump'), act: 'jump', rect: null },
+  { el: document.getElementById('tPatronus'), act: 'patronus', rect: null }
 ];
 var zones = [];          // virtual tap areas (auto-run one-thumb mode)
 
@@ -2501,26 +2941,32 @@ function cacheTouchRects() {
 function inRect(r, x, y, pad) {
   return r && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 }
+var patronusHeld = false;
 function handleTouches(e) {
   var tgt = e.target;
   if (tgt && tgt.closest && (tgt.closest('.screen') || tgt.closest('#tools'))) return;
   if (e.cancelable) e.preventDefault();
   firstInteraction();
   var i, b, tt, hit;
-  for (b = 0; b < tbtns.length; b++) touchState[tbtns[b].act] = false;
   touchState.left = touchState.right = touchState.jump = touchState.duck = false;
+  var wantPatronus = false;
 
   for (i = 0; i < e.touches.length; i++) {
     tt = e.touches[i];
-    for (b = 0; b < tbtns.length; b++)
-      if (inRect(tbtns[b].rect, tt.clientX, tt.clientY, 10)) touchState[tbtns[b].act] = true;
+    for (b = 0; b < tbtns.length; b++) {
+      if (!inRect(tbtns[b].rect, tt.clientX, tt.clientY, 10)) continue;
+      if (tbtns[b].act === 'patronus') wantPatronus = true;
+      else touchState[tbtns[b].act] = true;
+    }
     for (b = 0; b < zones.length; b++)
       if (inRect(zones[b].r, tt.clientX, tt.clientY, 0)) touchState[zones[b].act] = true;
   }
   for (b = 0; b < tbtns.length; b++) {
-    hit = touchState[tbtns[b].act];
+    hit = tbtns[b].act === 'patronus' ? wantPatronus : touchState[tbtns[b].act];
     if (hit) tbtns[b].el.classList.add('on'); else tbtns[b].el.classList.remove('on');
   }
+  if (wantPatronus && !patronusHeld) castPatronus();
+  patronusHeld = wantPatronus;
   mergeInput();
 }
 ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (ev) {
@@ -2529,7 +2975,7 @@ function handleTouches(e) {
 stage.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
 // ---- gamepad (optional) ----
-var padPauseWas = false;
+var padPauseWas = false, padPatronusWas = false;
 function pollGamepad() {
   if (!navigator.getGamepads) return;
   var pads = navigator.getGamepads(), p = null, i;
@@ -2542,6 +2988,8 @@ function pollGamepad() {
   padState.right = ax > 0.35 || btn(15);
   padState.jump = btn(0) || btn(12) || ay < -0.6;
   padState.duck = btn(13) || ay > 0.6;
+  if (btn(2) && !padPatronusWas) castPatronus();
+  padPatronusWas = btn(2);
   var ps = btn(9);
   if (ps && !padPauseWas) togglePause();
   padPauseWas = ps;
@@ -2564,19 +3012,28 @@ var UI = {
     this.win.classList.remove('on');
   },
   showLevelDone: function (secLeft) {
+    var timeBonus = game.lastBonus - game.lastGoals * 250;
     document.getElementById('levelStats').innerHTML =
       'Punkte: <b>' + (game.score - game.lastBonus) + '</b><br>' +
       'Restzeit: <b>' + secLeft + ' s</b><br>' +
-      'Zeitbonus: <b>' + game.lastBonus + '</b><br>' +
+      'Zeitbonus: <b>' + timeBonus + '</b><br>' +
+      'Ziele (' + game.lastGoals + '/3): <b>' + (game.lastGoals * 250) + '</b><br>' +
       'Gesamt: <b>' + game.score + '</b>';
+    var gl = '';
+    if (game.goals) game.goals.forEach(function (g) {
+      gl += '<span class="goal ' + (g.done ? 'ok' : 'no') + '">' + (g.done ? '✓ ' : '✗ ') + g.txt + '</span>';
+    });
+    document.getElementById('levelGoals').innerHTML = gl;
     document.getElementById('btnNext').textContent =
       (game.levelIndex + 1 >= LEVELS.length) ? 'Weiter' : 'Nächstes Level';
     btnPauseTop.style.display = 'none';
     this.hideAll(); this.level.classList.add('on');
   },
   showGameOver: function () {
-    document.getElementById('overStats').innerHTML =
-      'Punkte: <b>' + game.score + '</b><br>Highscore: <b>' + game.highscore + '</b>';
+    document.getElementById('overStats').innerHTML = game.endless
+      ? 'Strecke: <b>' + game.dist + ' m</b><br>Punkte: <b>' + game.score +
+        '</b><br>Endlos-Bestwert: <b>' + game.endlessBest + '</b>'
+      : 'Punkte: <b>' + game.score + '</b><br>Highscore: <b>' + game.highscore + '</b>';
     var tip = '';
     if (game.diff !== 'leicht') tip = 'Tipp: Stufe „Leicht" gibt dir 5 Leben und einen langsameren Voldemort.';
     else if (!game.autoRun) tip = 'Tipp: Mit „Auto-Lauf" läuft Harry von allein – du musst nur springen und ducken.';
@@ -2672,10 +3129,10 @@ function syncOptions() {
   btnAuto2.classList.toggle('on', game.autoRun);
   document.body.classList.toggle('autorun', game.autoRun);
   document.getElementById('hintKeys').textContent = game.autoRun
-    ? 'Harry läuft von allein · Leertaste / ↑ Springen · ↓ Ducken · ← Bremsen · P Pause'
-    : '← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause';
+    ? 'Harry läuft von allein · Leertaste / ↑ Springen · ↓ Ducken · ← Bremsen · E Patronus · P Pause'
+    : '← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · E Patronus · P Pause';
   document.getElementById('hintTouch').textContent = game.autoRun
-    ? 'Tippe rechts zum Springen, links zum Ducken · ‹‹ bremst'
+    ? 'Tippe rechts zum Springen, links zum Ducken · ✦ ruft den Patronus'
     : 'Nutze die Tasten unten auf dem Bildschirm';
   layout();
 }
@@ -2731,6 +3188,14 @@ function firstInteraction() {
 }
 
 document.getElementById('btnStart').addEventListener('click', startGameFromMenu);
+document.getElementById('btnEndless').addEventListener('click', function () {
+  firstInteraction();
+  UI.hideAll();
+  btnPauseTop.textContent = 'Pause';
+  clearInput();
+  startEndless();
+  if (!Audio2.muted) Audio2.startMusic();
+});
 document.getElementById('btnResume').addEventListener('click', togglePause);
 document.getElementById('btnRestartPause').addEventListener('click', startGameFromMenu);
 document.getElementById('btnNext').addEventListener('click', function () { nextLevel(); });
@@ -2811,6 +3276,7 @@ function layout() {
     place(tbtns[3].el, bs, jumpLeft - gapPx - bs, bottomBase);      // Ducken
   }
   place(tbtns[4].el, bj, jumpLeft, bottomJump);                     // Springen
+  place(tbtns[5].el, bs, jumpLeft + Math.round((bj - bs) / 2), bottomJump + bj + gapPx);   // Patronus
 
   // one-thumb tap zones over the picture (only in Auto-Lauf)
   // world pixels reserved at the bottom when the pads float over the picture
@@ -2829,7 +3295,7 @@ window.addEventListener('resize', layout);
 window.addEventListener('orientationchange', function () { setTimeout(layout, 150); });
 
 // --- GAME LOOP (fixed timestep + accumulator) ---------------------------
-var lastTs = 0, acc = 0, clock = 0, wasPlaying = false;
+var lastTs = 0, acc = 0, clock = 0, wasPlaying = false, wasPatronus = false;
 
 function frame(ts) {
   requestAnimationFrame(frame);
@@ -2850,6 +3316,12 @@ function frame(ts) {
   }
   if (steps === 6) acc = 0;
 
+  var pReady = game.state === ST.PLAY && game.patronus >= 1 && game.patronusT <= 0;
+  if (pReady !== wasPatronus) {
+    wasPatronus = pReady;
+    document.body.classList.toggle('patronus', pReady);
+    cacheTouchRects();
+  }
   var playing = game.state === ST.PLAY;
   if (playing !== wasPlaying) {
     wasPlaying = playing;
