@@ -17,115 +17,161 @@ html, body {
   touch-action:none; overscroll-behavior:none;
   -webkit-text-size-adjust:100%;
 }
+/* The stage is the whole viewport – no letterboxing any more. The canvas
+   fills it (landscape) or the top part of it (portrait, thumb zone below). */
 #stage {
-  --u:1px;
-  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:480px; height:270px; background:#000; overflow:hidden;
-  box-shadow:0 0 0 calc(var(--u)*1) #2a2338, 0 0 calc(var(--u)*14) rgba(0,0,0,.9);
+  --u:2px;              /* one game pixel in CSS px, set by JS */
+  --pad:0px;            /* height of the thumb zone below the canvas */
+  --toolsTop:40px;      /* pushed below the HUD bar by JS */
+  position:fixed; inset:0; overflow:hidden; background:#05040a;
 }
 #game {
-  position:absolute; inset:0; width:100%; height:100%; display:block;
+  position:absolute; left:0; top:0; display:block;
+  width:100%; height:100%;
   image-rendering:pixelated; image-rendering:-moz-crisp-edges; image-rendering:crisp-edges;
   touch-action:none;
 }
+/* thumb zone backdrop in portrait */
+#padArea {
+  position:absolute; left:0; right:0; bottom:0; height:var(--pad);
+  background:linear-gradient(#0a0714,#05040a);
+  border-top:1px solid rgba(180,160,220,.18);
+  display:none;
+}
+body.pad.playing #padArea { display:block; }
 
 /* --- OVERLAY SCREENS --- */
 .screen {
   position:absolute; inset:0; z-index:20;
   display:none; flex-direction:column; align-items:center; justify-content:center;
   text-align:center; gap:calc(var(--u)*5);
-  padding:calc(var(--u)*10) calc(var(--u)*14);
-  background:rgba(6,5,14,.88);
+  padding:calc(var(--u)*8) calc(var(--u)*10);
+  background:rgba(6,5,14,.9);
   overflow:auto;
 }
 .screen.on { display:flex; }
 .screen h1 {
-  font-size:calc(var(--u)*22); line-height:1.1; letter-spacing:calc(var(--u)*1);
-  color:#ffd964; text-shadow:calc(var(--u)*2) calc(var(--u)*2) 0 #5a1d1d;
-  font-weight:700;
+  font-size:clamp(26px, calc(var(--u)*22), 72px); line-height:1.1;
+  color:#ffd964; text-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 #5a1d1d; font-weight:700;
 }
 .screen h2 {
-  font-size:calc(var(--u)*15); line-height:1.15; color:#ffd964;
-  text-shadow:calc(var(--u)*1) calc(var(--u)*1) 0 #3a1616; font-weight:700;
+  font-size:clamp(20px, calc(var(--u)*15), 52px); line-height:1.15; color:#ffd964;
+  text-shadow:calc(var(--u)*.7) calc(var(--u)*.7) 0 #3a1616; font-weight:700;
 }
-.screen p { font-size:calc(var(--u)*8); line-height:1.55; max-width:calc(var(--u)*380); color:#e7dcbe; }
-.screen p.small { font-size:calc(var(--u)*6.5); color:#9b90b5; }
-.screen .keys { font-size:calc(var(--u)*7.5); color:#bfe9ff; line-height:1.7; }
-.screen .sub { font-size:calc(var(--u)*7); color:#8f84a8; letter-spacing:.06em; text-transform:uppercase; }
-.stats { font-size:calc(var(--u)*9); line-height:1.7; color:#e7dcbe; }
+.screen p { font-size:clamp(13px, calc(var(--u)*7.5), 24px); line-height:1.5; max-width:46em; color:#e7dcbe; }
+.screen p.small { font-size:clamp(10px, calc(var(--u)*6), 16px); color:#9b90b5; }
+.screen .keys { font-size:clamp(12px, calc(var(--u)*7), 20px); color:#bfe9ff; line-height:1.6; }
+.screen .sub { font-size:clamp(11px, calc(var(--u)*6.5), 18px); color:#8f84a8; letter-spacing:.1em; text-transform:uppercase; }
+.stats { font-size:clamp(14px, calc(var(--u)*9), 28px); line-height:1.7; color:#e7dcbe; }
 .stats b { color:#ffd964; }
 .btn {
   font-family:inherit; font-weight:700; cursor:pointer;
-  font-size:calc(var(--u)*11); line-height:1;
-  padding:calc(var(--u)*7) calc(var(--u)*16);
-  min-height:44px; min-width:44px;
+  font-size:clamp(15px, calc(var(--u)*11), 30px); line-height:1;
+  padding:calc(var(--u)*6) calc(var(--u)*14);
+  min-height:52px; min-width:52px;
   color:#1a1024; background:#ffd964;
   border:0; border-radius:calc(var(--u)*2);
-  box-shadow:0 calc(var(--u)*3) 0 #a8801f;
+  box-shadow:0 calc(var(--u)*2.5) 0 #a8801f;
   transition:transform .06s, box-shadow .06s;
   touch-action:manipulation;
 }
-.btn:active { transform:translateY(calc(var(--u)*3)); box-shadow:0 0 0 #a8801f; }
-.btn.ghost { background:#3a3150; color:#f2e6c4; box-shadow:0 calc(var(--u)*3) 0 #221c33; }
-.row { display:flex; gap:calc(var(--u)*8); flex-wrap:wrap; justify-content:center; }
+.btn:active { transform:translateY(calc(var(--u)*2.5)); box-shadow:0 0 0 #a8801f; }
+.btn.ghost { background:#3a3150; color:#f2e6c4; box-shadow:0 calc(var(--u)*2.5) 0 #221c33; }
+.row { display:flex; gap:calc(var(--u)*5); flex-wrap:wrap; justify-content:center; align-items:center; }
+
+/* segmented difficulty picker + toggles */
+.opt {
+  font-family:inherit; cursor:pointer; font-weight:700;
+  font-size:clamp(12px, calc(var(--u)*7.5), 20px);
+  padding:calc(var(--u)*4) calc(var(--u)*8);
+  min-height:44px;
+  color:#cfc3e8; background:rgba(58,49,80,.75);
+  border:2px solid rgba(150,130,200,.35); border-radius:calc(var(--u)*2);
+  touch-action:manipulation;
+}
+.opt.sel { color:#1a1024; background:#8fd07a; border-color:#c8e88a; }
+.opt.tog.on { color:#1a1024; background:#7fd8e8; border-color:#bfeff8; }
 
 /* --- SMALL TOP-RIGHT BUTTONS --- */
-#tools { position:absolute; z-index:25; right:calc(var(--u)*4); top:calc(var(--u)*27); display:flex; gap:calc(var(--u)*3); }
+#tools { position:absolute; z-index:25; right:calc(var(--u)*3); top:var(--toolsTop,40px); display:flex; gap:calc(var(--u)*3); }
 .tool {
-  font-family:inherit; cursor:pointer; font-size:calc(var(--u)*7);
-  padding:calc(var(--u)*3) calc(var(--u)*5);
-  min-height:calc(var(--u)*14);
+  font-family:inherit; cursor:pointer; font-size:clamp(11px, calc(var(--u)*6.5), 16px);
+  padding:calc(var(--u)*3) calc(var(--u)*4);
+  min-height:34px; min-width:34px;
   color:#f2e6c4; background:rgba(28,22,46,.82);
-  border:calc(var(--u)*1) solid rgba(180,160,220,.45);
+  border:1px solid rgba(180,160,220,.45);
   border-radius:calc(var(--u)*2); white-space:nowrap;
   touch-action:manipulation;
 }
 
 /* --- PORTRAIT HINT --- */
 #portraitHint {
-  position:fixed; left:0; right:0; bottom:calc(122px + env(safe-area-inset-bottom));
-  z-index:40; display:none; text-align:center; pointer-events:none;
-  font-size:12px; color:#d8cdf0; text-shadow:0 1px 2px #000;
-  padding:0 14px;
+  position:absolute; left:0; right:0; z-index:22;
+  bottom:calc(var(--pad) - 30px);
+  display:none; text-align:center; pointer-events:none;
+  font-size:12px; color:#c8bce8; text-shadow:0 1px 2px #000; padding:0 14px;
+  transition:opacity .8s;
 }
-body.portrait.touch #portraitHint { display:block; }
+body.portrait.touch.playing #portraitHint { display:block; }
 
 /* --- TOUCH CONTROLS --- */
-#touch { position:fixed; inset:0; z-index:30; pointer-events:none; display:none; }
-body.touch #touch { display:block; }
+#touch { position:absolute; inset:0; z-index:30; pointer-events:none; display:none; }
+body.touch.playing #touch { display:block; }
 .tbtn {
   position:absolute; pointer-events:auto; touch-action:none;
-  width:74px; height:74px; border-radius:50%;
-  background:rgba(226,214,255,.15);
-  border:2px solid rgba(226,214,255,.4);
-  color:#f2e6c4; text-align:center;
-  font-family:inherit; font-size:26px; line-height:70px; font-weight:700;
-  text-shadow:0 1px 2px #000;
+  border-radius:50%;
+  background:rgba(226,214,255,.16);
+  border:2px solid rgba(226,214,255,.42);
+  color:#f7eed0; text-align:center;
+  font-family:inherit; font-weight:700;
+  text-shadow:0 2px 3px #000;
+  display:flex; align-items:center; justify-content:center;
   -webkit-user-select:none; user-select:none;
 }
-.tbtn.big { width:86px; height:86px; line-height:82px; font-size:30px; }
-.tbtn.on { background:rgba(255,217,100,.45); border-color:rgba(255,217,100,.85); }
-#tLeft  { left:calc(14px + env(safe-area-inset-left));  bottom:calc(22px + env(safe-area-inset-bottom)); }
-#tRight { left:calc(100px + env(safe-area-inset-left)); bottom:calc(22px + env(safe-area-inset-bottom)); }
-#tJump  { right:calc(14px + env(safe-area-inset-right)); bottom:calc(22px + env(safe-area-inset-bottom)); }
-#tDuck  { right:calc(112px + env(safe-area-inset-right)); bottom:calc(22px + env(safe-area-inset-bottom)); }
+.tbtn.on { background:rgba(255,217,100,.5); border-color:rgba(255,217,100,.9); }
+/* auto-run: two big pads. manual: d-pad left, jump/duck right */
+body.autorun #tLeft, body.autorun #tRight { display:none; }
+body:not(.autorun) #tBrake { display:none; }
 </style>
 </head>
 <body>
 
 <div id="stage">
   <canvas id="game" width="480" height="270"></canvas>
+  <div id="padArea"></div>
 
   <div id="tools">
+    <button class="tool" id="btnFull" type="button">Vollbild</button>
     <button class="tool" id="btnSound" type="button">Ton an</button>
     <button class="tool" id="btnPause" type="button">Pause</button>
   </div>
+
+  <div id="touch">
+    <div class="tbtn" id="tLeft"  data-act="left"  aria-label="Nach links laufen">◀</div>
+    <div class="tbtn" id="tRight" data-act="right" aria-label="Nach rechts laufen">▶</div>
+    <div class="tbtn" id="tBrake" data-act="left"  aria-label="Bremsen">‹‹</div>
+    <div class="tbtn" id="tDuck"  data-act="duck"  aria-label="Ducken">▼</div>
+    <div class="tbtn" id="tJump"  data-act="jump"  aria-label="Springen">▲</div>
+  </div>
+
+  <div id="portraitHint">Für das beste Erlebnis drehe dein Gerät ins Querformat</div>
 
   <!-- Startbildschirm -->
   <div class="screen on" id="screenStart">
     <h1>Flucht vor Voldemort</h1>
     <p>Voldemort jagt Harry durch Hogwarts und schleudert dir seine Zaubersprüche hinterher.
        Du kannst nicht kämpfen – nur laufen, springen und dich ducken. Erreiche das Portal, bevor er dich einholt!</p>
+    <div class="sub">Schwierigkeit</div>
+    <div class="row" id="diffRow">
+      <button class="opt" data-diff="leicht" type="button">Leicht</button>
+      <button class="opt sel" data-diff="normal" type="button">Normal</button>
+      <button class="opt" data-diff="schwer" type="button">Schwer</button>
+    </div>
+    <div class="row">
+      <button class="opt tog" id="btnAuto" type="button">Auto-Lauf: Aus</button>
+      <button class="opt tog" id="btnLayout" type="button">Tasten: Unten</button>
+      <button class="opt tog" id="btnFull2" type="button">Vollbild</button>
+    </div>
     <button class="btn" id="btnStart" type="button">Spiel starten</button>
     <div class="sub">Steuerung</div>
     <div class="keys" id="hintKeys">← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause</div>
@@ -136,11 +182,22 @@ body.touch #touch { display:block; }
   <!-- Pause -->
   <div class="screen" id="screenPause">
     <h2>Pause</h2>
-    <div class="keys">← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause</div>
+    <div class="sub">Schwierigkeit</div>
+    <div class="row" id="diffRow2">
+      <button class="opt" data-diff="leicht" type="button">Leicht</button>
+      <button class="opt sel" data-diff="normal" type="button">Normal</button>
+      <button class="opt" data-diff="schwer" type="button">Schwer</button>
+    </div>
+    <div class="row">
+      <button class="opt tog" id="btnAuto2" type="button">Auto-Lauf: Aus</button>
+      <button class="opt tog" id="btnLayout2" type="button">Tasten: Unten</button>
+      <button class="opt tog" id="btnFull3" type="button">Vollbild</button>
+    </div>
     <div class="row">
       <button class="btn" id="btnResume" type="button">Fortsetzen</button>
       <button class="btn ghost" id="btnRestartPause" type="button">Neu starten</button>
     </div>
+    <div class="keys">← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause</div>
   </div>
 
   <!-- Level geschafft -->
@@ -154,6 +211,7 @@ body.touch #touch { display:block; }
   <div class="screen" id="screenOver">
     <h2>Spiel vorbei!</h2>
     <div class="stats" id="overStats"></div>
+    <p class="small" id="overTip"></p>
     <button class="btn" id="btnRestartOver" type="button">Neu starten</button>
   </div>
 
@@ -165,15 +223,6 @@ body.touch #touch { display:block; }
   </div>
 </div>
 
-<div id="touch">
-  <div class="tbtn" id="tLeft"  data-act="left"  aria-label="Nach links laufen">◀</div>
-  <div class="tbtn" id="tRight" data-act="right" aria-label="Nach rechts laufen">▶</div>
-  <div class="tbtn big" id="tJump" data-act="jump" aria-label="Springen">▲</div>
-  <div class="tbtn" id="tDuck"  data-act="duck"  aria-label="Ducken">▼</div>
-</div>
-
-<div id="portraitHint">Für das beste Erlebnis drehe dein Gerät ins Querformat</div>
-
 <script>
 "use strict";
 /* =========================================================================
@@ -184,73 +233,106 @@ body.touch #touch { display:block; }
 // --- CONFIG -------------------------------------------------------------
 // Every tunable number lives here so balancing stays easy.
 var CONFIG = {
-  // resolution / world
-  VW: 480, VH: 270,          // internal pixel resolution (16:9)
-  TILE: 16,                  // tile size in pixels
-  ROWS: 17,                  // world height in tiles (272px, camera shows 270)
+  // --- view -------------------------------------------------------------
+  // There is no fixed internal resolution any more. The canvas fills the
+  // whole screen and the camera shows a window of the world whose size is
+  // derived from the device (the way 2D engines handle orthographic size).
+  TILE: 16,
+  ROWS: 26,                  // world height in tiles (416 px, lots of sky for portrait)
+  VIEW_MIN_W: 260,           // never show less world width than this (fairness)
+  VIEW_MAX_W: 640,
+  VIEW_MIN_H: 176,           // never show less world height than this
+  VIEW_MAX_H: 360,
+  VIEW_TARGET_H: 240,        // preferred world height on roomy screens
+  CAM_LEAD: 0.38,            // Harry rests at 38 % of the view width
+  CAM_EYE: 0.58,             // ... and 58 % down the view height
+  CAM_LERP: 12,
+
   STEP: 1 / 60,              // fixed timestep in seconds
   MAX_FRAME: 0.25,           // clamp for huge delta after tab switch
 
-  // player physics (values are per fixed step)
+  // --- player physics (per fixed step) ----------------------------------
   GRAVITY: 0.40,
   MAX_FALL: 8.6,
   ACCEL: 0.55,
   AIR_ACCEL: 0.34,
   FRICTION: 0.74,
   MAX_SPEED: 2.0,
-  DUCK_SPEED: 0.75,
+  DUCK_SPEED: 0.8,
   JUMP_VEL: -6.9,
   JUMP_CUT: 0.72,            // upward speed kept per frame once the button is released
-  COYOTE_MS: 100,            // grace period after leaving a ledge
-  BUFFER_MS: 120,            // early jump press is remembered this long
-  STOMP_BOUNCE: -4.4,
+  COYOTE_MS: 110,            // grace period after leaving a ledge
+  BUFFER_MS: 130,            // early jump press is remembered this long
+  CORNER_NUDGE: 5,           // Celeste-style corner correction, in pixels
+  STOMP_BOUNCE: -4.6,
   INVULN_TIME: 1.6,          // seconds of invincibility after a hit
 
-  // power-ups
+  // --- game feel --------------------------------------------------------
+  HITSTOP_STOMP: 0.06,       // freeze frames sell the impact
+  HITSTOP_HURT: 0.13,
+  COMBO_TIME: 2.4,           // seconds to keep a pickup chain alive
+  COMBO_MAX: 5,
+  NEAR_MISS_DIST: 14,        // px: dodging a spell this closely pays out
+  PTS_NEAR_MISS: 25,
+
+  // --- power-ups --------------------------------------------------------
   NIMBUS_TIME: 8,
   NIMBUS_SPEED: 3.0,
   NIMBUS_JUMP: -7.9,
   CLOAK_TIME: 6,
   MAX_LIVES: 3,
 
-  // Voldemort
-  VOLD_GAP: 170,             // he never falls further behind than this
-  VOLD_CATCH: 15,            // distance at which he catches Harry
-  VOLD_PUSHBACK: 162,        // how far he is thrown back after a hit
-  VOLD_SPEED: [22, 28, 35],  // px per second of self-propelled closing speed
+  // --- Voldemort --------------------------------------------------------
+  // The chase distance scales with the visible width so he stays on screen
+  // no matter the device; his speed scales with it so the reaction time
+  // a player gets stays the same.
+  VOLD_GAP_FACTOR: 0.36,     // of view width
+  VOLD_GAP_REF: 170,         // reference gap the speeds below are tuned for
+  VOLD_CATCH: 15,
+  VOLD_SPEED: [22, 28, 35],  // px/s of self-propelled closing speed per level
   VOLD_IDLE_BOOST: 38,       // extra px/s while Harry does not run away
-  VOLD_RAMP: 1.7,            // extra px/s added per 10 seconds in a level
-  CAM_OFFSET: 178,           // Harry's resting x position on screen
+  VOLD_RAMP: 1.7,            // extra px/s per 10 seconds in a level
 
-  // spells
-  SPELL_TELEGRAPH: 0.5,      // warning time before a spell is fired
-  SPELL_INTERVAL: [3.1, 2.5, 1.9],   // seconds between casts per level
-  SPELL_FIRST: [5.0, 3.5, 2.5],      // grace period at the start of a level
+  // --- spells -----------------------------------------------------------
+  SPELL_TELEGRAPH: 0.55,     // warning time before a spell is fired
+  SPELL_INTERVAL: [3.1, 2.5, 1.9],
+  SPELL_FIRST: [5.0, 3.5, 2.5],
   SPELL_JITTER: 1.1,
   AVADA_SPEED: 3.5,
   EXPELLI_G: 0.13,
   EXPELLI_SPEED: 2.7,
   CRUCIO_SPEED: 1.42,
-  CRUCIO_HOMING: 1.25,       // seconds the purple orb tracks Harry
+  CRUCIO_HOMING: 1.25,
   CRUCIO_TURN: 0.075,
 
-  // enemies
+  // --- enemies ----------------------------------------------------------
   TODESSER_SPEED: 0.46,
   DEMENTOR_SPEED: 0.42,
 
-  // scoring
+  // --- scoring ----------------------------------------------------------
   PTS_SCHNATZ: 50,
   PTS_STAR: 200,
   PTS_TODESSER: 100,
   TIME_BONUS_PER_SEC: 10,
-  PAR_TIME: [110, 115, 125],  // seconds; leftover time becomes bonus points
+  PAR_TIME: [110, 115, 125],
 
-  // fx
-  MAX_PARTICLES: 130
+  MAX_PARTICLES: 150
 };
 
-var VW = CONFIG.VW, VH = CONFIG.VH, T = CONFIG.TILE, ROWS = CONFIG.ROWS;
+// Three assist levels. "Leicht" is meant to be finishable by a newcomer,
+// "Schwer" is for players who already know the routes.
+var DIFFICULTY = {
+  leicht: { lives: 5, voldMul: 0.72, spellMul: 1.45, idleMul: 0.6 },
+  normal: { lives: 3, voldMul: 1.0, spellMul: 1.0, idleMul: 1.0 },
+  schwer: { lives: 2, voldMul: 1.3, spellMul: 0.72, idleMul: 1.35 }
+};
+
+var T = CONFIG.TILE, ROWS = CONFIG.ROWS;
 var WORLD_H = ROWS * T;
+// Live view window in world pixels – recomputed on every resize.
+var view = { w: 480, h: 270, scale: 1, inset: 0 };
+function playH() { return Math.max(120, view.h - view.inset); }   // world height above the pads
+function camYRef() { return Math.max(0, WORLD_H - playH()); }
 
 // --- SMALL HELPERS ------------------------------------------------------
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -759,6 +841,8 @@ var Audio2 = {
   cast: function () { this.noiseBurst(0.34, 0.2, 380, 2600, 2.2); this.tone('sine', 180, 620, 0.3, 0.1); },
   spellHit: function () { this.noiseBurst(0.22, 0.24, 2200, 200, 1.2); },
   land: function () { this.noiseBurst(0.07, 0.09, 700, 200, 1.5); },
+  nearMiss: function () { this.tone('sine', 1200, 1800, 0.09, 0.14); this.tone('sine', 1800, 2400, 0.07, 0.09, 0.05); },
+  combo: function (n) { var f = 660 * Math.pow(1.16, n); this.tone('square', f, f, 0.07, 0.16); },
   portal: function () { this.tone('sine', 300, 1200, 0.4, 0.16); this.tone('sine', 450, 1800, 0.4, 0.1, 0.05); },
   fanfare: function () {
     var n = [523.25, 659.25, 783.99, 1046.5], i;
@@ -841,7 +925,7 @@ var Audio2 = {
 
 // --- LEVELS -------------------------------------------------------------
 // Compact, hand-designed data. All coordinates are TILE coordinates
-// (16 px) unless the key says otherwise. Ground rows are 15 and 16.
+// (16 px) unless the key says otherwise.
 //   ground : [startTile, lengthInTiles]  -> everything between is a pit
 //   blocks : [x, y, w, h]                -> solid rectangles, y = top row
 //   movers : pixel coordinates, axis 'x' or 'y'
@@ -849,7 +933,8 @@ var Audio2 = {
 //   coins / stars : [x, y]
 //   power  : {x, y, t:'nimbus'|'cloak'|'frog'}
 //   foes   : {t:'tod'|'dem', x, y, r}    tod: y = surface row, dem: y = centre row
-var GROUND_ROW = 15;
+// Ground rows are 24 and 25; everything above row 24 is sky (portrait shows it all).
+var GROUND_ROW = 24;
 
 var LEVELS = [
   {
@@ -862,33 +947,32 @@ var LEVELS = [
       [168, 32]
     ],
     blocks: [
-      [5, 13, 4, 1], [11, 13, 4, 1], [18, 13, 4, 1], [23, 11, 3, 1], [45, 13, 4, 1],
-      [58, 14, 1, 1], [63, 13, 4, 1], [69, 13, 4, 1], [92, 13, 4, 1], [98, 13, 4, 1],
-      [109, 14, 1, 1], [124, 13, 4, 1], [155, 13, 4, 1], [166, 14, 1, 1], [171, 13, 4, 1],
-      [176, 11, 3, 1], [181, 13, 4, 1], [186, 11, 3, 1]
+      [5, 22, 4, 1], [11, 22, 4, 1], [18, 22, 4, 1], [23, 20, 3, 1], [45, 22, 4, 1],
+      [58, 23, 1, 1], [63, 22, 4, 1], [69, 22, 4, 1], [92, 22, 4, 1], [98, 22, 4, 1],
+      [109, 23, 1, 1], [124, 22, 4, 1], [155, 22, 4, 1], [166, 23, 1, 1], [171, 22, 4, 1],
+      [176, 20, 3, 1], [181, 22, 4, 1], [188, 22, 4, 1]
     ],
     movers: [],
     hazards: [41, 88, 120, 151],
     coins: [
-      [6, 12], [7, 12], [12, 12], [13, 12], [19, 12], [20, 12], [24, 10], [31, 11],
-      [46, 12], [47, 12], [58, 11], [59, 11], [64, 12], [65, 12], [70, 12], [71, 12],
-      [80, 11], [93, 12], [94, 12], [99, 12], [100, 12], [109, 11], [110, 11], [125, 12],
-      [126, 12], [133, 11], [156, 12], [157, 12], [166, 11], [167, 11], [172, 12], [173, 12],
-      [177, 10], [182, 12], [183, 12], [187, 10]
+      [6, 21], [7, 21], [12, 21], [13, 21], [19, 21], [20, 21], [24, 19], [31, 20],
+      [46, 21], [47, 21], [58, 20], [59, 20], [64, 21], [65, 21], [70, 21], [71, 21],
+      [80, 20], [93, 21], [94, 21], [99, 21], [100, 21], [109, 20], [110, 20], [125, 21],
+      [126, 21], [133, 20], [156, 21], [157, 21], [166, 20], [167, 20], [172, 21], [173, 21],
+      [177, 19], [182, 21], [183, 21], [189, 21], [190, 21]
     ],
-    stars: [[24, 9], [177, 9]],
+    stars: [[24, 18], [177, 18]],
     power: [
-      { x: 54, y: 13, t: 'nimbus' },
-      { x: 105, y: 13, t: 'cloak' },
-      { x: 138, y: 13, t: 'frog' }
+      { x: 55, y: 22, t: 'nimbus' },
+      { x: 112, y: 22, t: 'cloak' },
+      { x: 141, y: 22, t: 'frog' }
     ],
     foes: [
-      { t: 'tod', x: 36, y: 15, r: 8 },
-      { t: 'tod', x: 73, y: 15, r: 3 },
-      { t: 'tod', x: 88, y: 15, r: 3 },
-      { t: 'tod', x: 120, y: 15, r: 3 },
-      { t: 'tod', x: 147, y: 15, r: 7 },
-      { t: 'tod', x: 175, y: 15, r: 5 }
+      { t: 'tod', x: 36, y: 24, r: 8 },
+      { t: 'tod', x: 73, y: 24, r: 3 },
+      { t: 'tod', x: 88, y: 24, r: 3 },
+      { t: 'tod', x: 150, y: 24, r: 4 },
+      { t: 'tod', x: 175, y: 24, r: 5 }
     ]
   },
   {
@@ -901,37 +985,37 @@ var LEVELS = [
       [122, 18], [143, 14], [160, 22], [185, 25]
     ],
     blocks: [
-      [5, 13, 4, 1], [10, 11, 3, 1], [21, 14, 1, 1], [42, 14, 1, 1], [61, 14, 1, 1],
-      [66, 13, 4, 1], [78, 14, 1, 1], [101, 14, 1, 1], [120, 14, 1, 1], [141, 14, 1, 1],
-      [146, 13, 4, 1], [158, 14, 1, 1], [172, 13, 4, 1], [183, 14, 1, 1], [188, 13, 4, 1],
-      [194, 13, 4, 1], [199, 11, 3, 1]
+      [5, 22, 4, 1], [10, 20, 3, 1], [21, 23, 1, 1], [42, 23, 1, 1], [61, 23, 1, 1],
+      [66, 22, 4, 1], [78, 23, 1, 1], [101, 23, 1, 1], [120, 23, 1, 1], [141, 23, 1, 1],
+      [146, 22, 4, 1], [158, 23, 1, 1], [172, 22, 4, 1], [183, 23, 1, 1], [188, 22, 4, 1],
+      [194, 22, 4, 1], [199, 20, 3, 1]
     ],
     movers: [],
     hazards: [31, 52, 89, 110, 131, 168],
     coins: [
-      [6, 12], [7, 12], [11, 10], [21, 11], [22, 11], [42, 11], [43, 11], [61, 11],
-      [62, 11], [67, 12], [68, 12], [78, 11], [79, 11], [101, 11], [102, 11], [120, 11],
-      [121, 11], [141, 11], [142, 11], [147, 12], [148, 12], [158, 11], [159, 11], [173, 12],
-      [174, 12], [183, 11], [184, 11], [189, 12], [190, 12], [195, 12], [196, 12], [200, 10]
+      [6, 21], [7, 21], [11, 19], [21, 20], [22, 20], [42, 20], [43, 20], [61, 20],
+      [62, 20], [67, 21], [68, 21], [78, 20], [79, 20], [101, 20], [102, 20], [120, 20],
+      [121, 20], [141, 20], [142, 20], [147, 21], [148, 21], [158, 20], [159, 20], [173, 21],
+      [174, 21], [183, 20], [184, 20], [189, 21], [190, 21], [195, 21], [196, 21], [200, 19]
     ],
-    stars: [[11, 9], [200, 9]],
+    stars: [[11, 18], [200, 18]],
     power: [
-      { x: 46, y: 13, t: 'cloak' },
-      { x: 84, y: 13, t: 'frog' },
-      { x: 111, y: 13, t: 'nimbus' },
-      { x: 138, y: 13, t: 'frog' }
+      { x: 46, y: 22, t: 'cloak' },
+      { x: 84, y: 22, t: 'frog' },
+      { x: 111, y: 22, t: 'nimbus' },
+      { x: 138, y: 22, t: 'frog' }
     ],
     foes: [
-      { t: 'tod', x: 31, y: 15, r: 6 },
-      { t: 'tod', x: 70, y: 15, r: 3 },
-      { t: 'tod', x: 93, y: 15, r: 3 },
-      { t: 'tod', x: 125, y: 15, r: 9 },
-      { t: 'tod', x: 163, y: 15, r: 8 },
-      { t: 'dem', x: 32, y: 11, r: 2 },
-      { t: 'dem', x: 72, y: 10, r: 2 },
-      { t: 'dem', x: 92, y: 11, r: 2 },
-      { t: 'dem', x: 132, y: 10, r: 2 },
-      { t: 'dem', x: 152, y: 11, r: 2 }
+      { t: 'tod', x: 31, y: 24, r: 6 },
+      { t: 'tod', x: 70, y: 24, r: 3 },
+      { t: 'tod', x: 93, y: 24, r: 3 },
+      { t: 'tod', x: 125, y: 24, r: 9 },
+      { t: 'tod', x: 163, y: 24, r: 8 },
+      { t: 'dem', x: 32, y: 20, r: 2 },
+      { t: 'dem', x: 72, y: 19, r: 2 },
+      { t: 'dem', x: 92, y: 20, r: 2 },
+      { t: 'dem', x: 132, y: 19, r: 2 },
+      { t: 'dem', x: 152, y: 20, r: 2 }
     ]
   },
   {
@@ -944,46 +1028,47 @@ var LEVELS = [
       [128, 20], [151, 22], [177, 43]
     ],
     blocks: [
-      [5, 13, 4, 1], [10, 11, 3, 1], [25, 13, 4, 1], [61, 14, 1, 1], [66, 13, 4, 1],
-      [93, 13, 4, 1], [104, 14, 1, 1], [109, 13, 4, 1], [114, 11, 3, 1], [138, 13, 4, 1],
-      [149, 14, 1, 1], [189, 13, 4, 1], [194, 11, 3, 1], [199, 13, 4, 1], [204, 11, 3, 1],
-      [210, 13, 4, 1]
+      [5, 22, 4, 1], [10, 20, 3, 1], [25, 22, 4, 1], [61, 23, 1, 1], [66, 22, 4, 1],
+      [93, 22, 4, 1], [104, 23, 1, 1], [109, 22, 4, 1], [114, 20, 3, 1], [138, 22, 4, 1],
+      [149, 23, 1, 1], [189, 22, 4, 1], [194, 20, 3, 1], [197, 18, 3, 1], [202, 22, 4, 1],
+      [207, 20, 3, 1]
     ],
     movers: [
-      { x: 288, y: 208, w: 48, h: 8, axis: 'x', range: 64, speed: 0.45 },
-      { x: 608, y: 192, w: 48, h: 8, axis: 'y', range: 56, speed: 0.4 },
-      { x: 1264, y: 208, w: 48, h: 8, axis: 'x', range: 64, speed: 0.5 },
-      { x: 1984, y: 192, w: 48, h: 8, axis: 'y', range: 64, speed: 0.45 },
-      { x: 2768, y: 208, w: 48, h: 8, axis: 'x', range: 72, speed: 0.55 }
+      { x: 288, y: 352, w: 48, h: 8, axis: 'x', range: 64, speed: 0.45 },
+      { x: 608, y: 336, w: 48, h: 8, axis: 'y', range: 56, speed: 0.4 },
+      { x: 1264, y: 352, w: 48, h: 8, axis: 'x', range: 64, speed: 0.5 },
+      { x: 1984, y: 336, w: 48, h: 8, axis: 'y', range: 64, speed: 0.45 },
+      { x: 2768, y: 352, w: 48, h: 8, axis: 'x', range: 72, speed: 0.55 }
     ],
     hazards: [50, 89, 134, 162, 185],
     coins: [
-      [6, 12], [7, 12], [11, 10], [19, 11], [20, 11], [26, 12], [27, 12], [39, 11],
-      [40, 11], [61, 11], [62, 11], [67, 12], [68, 12], [80, 11], [81, 11], [94, 12],
-      [95, 12], [104, 11], [105, 11], [110, 12], [111, 12], [115, 10], [125, 11], [126, 11],
-      [139, 12], [140, 12], [149, 11], [150, 11], [174, 11], [175, 11], [190, 12], [191, 12],
-      [195, 10], [200, 12], [201, 12], [205, 10], [211, 12], [212, 12]
+      [6, 21], [7, 21], [11, 19], [19, 20], [20, 20], [26, 21], [27, 21], [39, 20],
+      [40, 20], [61, 20], [62, 20], [67, 21], [68, 21], [80, 20], [81, 20], [94, 21],
+      [95, 21], [104, 20], [105, 20], [110, 21], [111, 21], [115, 19], [125, 20], [126, 20],
+      [139, 21], [140, 21], [149, 20], [150, 20], [174, 20], [175, 20], [190, 21], [191, 21],
+      [195, 19], [198, 17], [199, 17], [203, 21], [204, 21], [208, 19]
     ],
-    stars: [[11, 9], [115, 9], [195, 9]],
+    stars: [[198, 16], [11, 18], [115, 18]],
     power: [
-      { x: 47, y: 13, t: 'cloak' },
-      { x: 73, y: 13, t: 'nimbus' },
-      { x: 100, y: 13, t: 'frog' },
-      { x: 136, y: 13, t: 'cloak' },
-      { x: 162, y: 13, t: 'frog' }
+      { x: 48, y: 22, t: 'cloak' },
+      { x: 75, y: 22, t: 'nimbus' },
+      { x: 118, y: 22, t: 'frog' },
+      { x: 146, y: 22, t: 'cloak' },
+      { x: 167, y: 22, t: 'frog' }
     ],
     foes: [
-      { t: 'tod', x: 29, y: 15, r: 5 },
-      { t: 'tod', x: 86, y: 15, r: 6 },
-      { t: 'tod', x: 113, y: 15, r: 7 },
-      { t: 'tod', x: 180, y: 15, r: 8 },
-      { t: 'tod', x: 193, y: 15, r: 5 },
-      { t: 'dem', x: 31, y: 11, r: 2 },
-      { t: 'dem', x: 71, y: 10, r: 2 },
-      { t: 'dem', x: 88, y: 11, r: 2 },
-      { t: 'dem', x: 131, y: 10, r: 2 },
-      { t: 'dem', x: 144, y: 11, r: 2 },
-      { t: 'dem', x: 183, y: 10, r: 2 }
+      { t: 'tod', x: 29, y: 24, r: 5 },
+      { t: 'tod', x: 86, y: 24, r: 6 },
+      { t: 'tod', x: 131, y: 24, r: 6 },
+      { t: 'tod', x: 155, y: 24, r: 9 },
+      { t: 'tod', x: 180, y: 24, r: 8 },
+      { t: 'tod', x: 193, y: 24, r: 8 },
+      { t: 'dem', x: 31, y: 20, r: 2 },
+      { t: 'dem', x: 71, y: 19, r: 2 },
+      { t: 'dem', x: 88, y: 20, r: 2 },
+      { t: 'dem', x: 131, y: 19, r: 2 },
+      { t: 'dem', x: 144, y: 20, r: 2 },
+      { t: 'dem', x: 183, y: 19, r: 2 }
     ]
   }
 ];
@@ -1022,10 +1107,19 @@ var game = {
   score: 0,
   highscore: 0,          // session only – no localStorage on purpose
   lives: CONFIG.MAX_LIVES,
+  maxLives: CONFIG.MAX_LIVES,
   time: 0,
   lastBonus: 0,
-  shake: 0
+  shake: 0,
+  freeze: 0,             // hit-stop: a few frozen frames sell every impact
+  combo: 0,
+  comboT: 0,
+  voldGap: 170,          // recomputed from the view width on every resize
+  banner: 0,             // level title card timer
+  diff: 'normal',
+  autoRun: false
 };
+function diffData() { return DIFFICULTY[game.diff] || DIFFICULTY.normal; }
 
 var level = {
   data: null, cols: 0, widthPx: 0, grid: null, theme: null,
@@ -1052,7 +1146,7 @@ var pi = 0, si = 0, fi = 0;
   for (i = 0; i < CONFIG.MAX_PARTICLES; i++)
     particles.push({ on: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 1, c: '#fff', s: 1, g: 0 });
   for (i = 0; i < 26; i++)
-    spells.push({ on: false, t: 'avada', x: 0, y: 0, w: 8, h: 6, vx: 0, vy: 0, g: 0, life: 0, home: 0, ph: 0 });
+    spells.push({ on: false, t: 'avada', x: 0, y: 0, w: 8, h: 6, vx: 0, vy: 0, g: 0, life: 0, home: 0, ph: 0, md: 999, scored: false });
   for (i = 0; i < 10; i++)
     floaters.push({ on: false, x: 0, y: 0, life: 0, txt: '', c: '#fff' });
 })();
@@ -1186,14 +1280,28 @@ function moveAndCollide(e, dx, dy) {
       for (tx = x0; tx <= x1; tx++) if (solidAt(tx, ty)) { e.y = ty * T - e.h; e.vy = 0; e.onGround = true; break; }
     } else {
       ty = Math.floor(e.y / T);
-      for (tx = x0; tx <= x1; tx++) if (solidAt(tx, ty)) { e.y = (ty + 1) * T; e.vy = 0; break; }
+      var blocked = false;
+      for (tx = x0; tx <= x1; tx++) if (solidAt(tx, ty)) { blocked = true; break; }
+      // Celeste-style corner correction: clipping a ledge by a few pixels
+      // slides Harry around it instead of killing the jump dead.
+      if (blocked && e.corner) {
+        for (var n = 1; n <= CONFIG.CORNER_NUDGE && blocked; n++) {
+          for (var dir = 1; dir >= -1 && blocked; dir -= 2) {
+            var nx = e.x + dir * n, clear = true;
+            var a0 = Math.floor(nx / T), a1 = Math.floor((nx + e.w - EPS) / T);
+            for (var q = a0; q <= a1; q++) if (solidAt(q, ty)) { clear = false; break; }
+            if (clear) { e.x = nx; blocked = false; }
+          }
+        }
+      }
+      if (blocked) { e.y = (ty + 1) * T; e.vy = 0; }
     }
   }
 }
 
 // --- PLAYER -------------------------------------------------------------
 function resetPlayer(fullLevel) {
-  player.x = 3 * T; player.y = GROUND_ROW * T - player.h;
+  player.x = 3 * T; player.y = GROUND_ROW * T - player.h; player.corner = true;
   player.vx = 0; player.vy = 0; player.face = 1;
   player.onGround = true; player.ducking = false; player.h = 14;
   player.coyote = 0; player.buffer = 0; player.animT = 0;
@@ -1213,6 +1321,9 @@ function canStand() {
 function updatePlayer(dt) {
   var C = CONFIG;
   var left = Input.left, right = Input.right, up = Input.jump, down = Input.duck;
+  // Auto-Lauf (one-thumb mode, the Super Mario Run / Rayman idea): Harry keeps
+  // running, the left input becomes a brake and ducking doubles as slowing down.
+  if (game.autoRun) { right = !left; }
 
   // ride a moving platform
   if (player.rider) { player.x += player.rider.dx; player.y += player.rider.dy; player.rider = null; }
@@ -1307,7 +1418,9 @@ function updatePlayer(dt) {
 function loseLife(pit) {
   if (game.state !== ST.PLAY) return;
   game.lives--;
-  game.shake = 0.35;
+  game.shake = 0.45;
+  game.freeze = CONFIG.HITSTOP_HURT;
+  game.combo = 0; game.comboT = 0;
   Audio2.hurt();
   burst(player.x + 5, player.y + 7, '#ff6a4a', 12, 2.4);
   if (game.lives <= 0) { endGame(); return; }
@@ -1320,7 +1433,7 @@ function loseLife(pit) {
   } else {
     player.vy = -3.4; player.vx = -0.8;
   }
-  vold.x = Math.min(vold.x, player.x - CONFIG.VOLD_PUSHBACK);
+  vold.x = Math.min(vold.x, player.x - game.voldGap * 0.95);
 }
 
 function hurtPlayer() {
@@ -1330,10 +1443,10 @@ function hurtPlayer() {
 
 // --- VOLDEMORT & SPELLS -------------------------------------------------
 function resetVoldemort() {
-  vold.x = player.x - CONFIG.VOLD_GAP;
+  vold.x = player.x - game.voldGap;
   vold.y = player.y - 8;
   vold.cast = 0; vold.bob = 0;
-  vold.next = CONFIG.SPELL_FIRST[game.levelIndex];
+  vold.next = CONFIG.SPELL_FIRST[game.levelIndex] * diffData().spellMul;
 }
 
 function pickSpell() {
@@ -1354,22 +1467,24 @@ function newSpell() {
 function castSpell(type) {
   var s = newSpell(); if (!s) return;
   var sx = vold.x + 15, sy = vold.y + 12;
+  var k = game.voldGap / CONFIG.VOLD_GAP_REF;    // shorter chase = slower bolts
   s.on = true; s.t = type; s.x = sx; s.y = sy; s.g = 0; s.home = 0; s.ph = 0; s.life = 10;
+  s.md = 999; s.scored = false;
   if (type === 'avada') {
     // fast green bolt, flies low – has to be jumped over
     s.w = 14; s.h = 6;
     s.y = player.y + player.h - 12;
-    s.vx = CONFIG.AVADA_SPEED; s.vy = 0;
+    s.vx = CONFIG.AVADA_SPEED * k; s.vy = 0;
   } else if (type === 'expelli') {
     // red bolt bouncing along in an arc – duck when it is high, jump when it is low
     s.w = 9; s.h = 7;
     s.y = sy;
-    s.vx = CONFIG.EXPELLI_SPEED; s.vy = -3.3; s.g = CONFIG.EXPELLI_G;
+    s.vx = CONFIG.EXPELLI_SPEED * k; s.vy = -3.3; s.g = CONFIG.EXPELLI_G;
   } else {
     // slow purple orb, follows Harry for a moment
     s.w = 11; s.h = 11;
     s.y = player.y + 2;
-    s.vx = CONFIG.CRUCIO_SPEED; s.vy = 0; s.home = CONFIG.CRUCIO_HOMING;
+    s.vx = CONFIG.CRUCIO_SPEED * k; s.vy = 0; s.home = CONFIG.CRUCIO_HOMING;
   }
   burst(sx, sy, type === 'avada' ? '#7cff5a' : (type === 'expelli' ? '#ff5a4a' : '#c07aff'), 8, 1.8);
 }
@@ -1378,11 +1493,14 @@ function updateVoldemort(dt) {
   var C = CONFIG, lv = game.levelIndex;
   var gap = player.x - vold.x;
 
+  var d = diffData();
+  var scale = game.voldGap / C.VOLD_GAP_REF;   // keeps the reaction time device-independent
   var speed = C.VOLD_SPEED[lv] + C.VOLD_RAMP * (game.time / 10);
-  if (Math.abs(player.vx) < 0.6) speed += C.VOLD_IDLE_BOOST;
-  if (gap < 60) speed *= 0.35;               // he savours the moment – a fair last chance
+  if (Math.abs(player.vx) < 0.6) speed += C.VOLD_IDLE_BOOST * d.idleMul;
+  speed *= d.voldMul * scale;
+  if (gap < 60 * scale) speed *= 0.35;       // he savours the moment – a fair last chance
   vold.x += speed * dt;
-  var minX = player.x - C.VOLD_GAP;
+  var minX = player.x - game.voldGap;
   if (vold.x < minX) vold.x = minX;
 
   var ty = clamp(player.y - 10, 14, WORLD_H - 60);
@@ -1405,7 +1523,7 @@ function updateVoldemort(dt) {
   gap = player.x - vold.x;
   if (gap < C.VOLD_CATCH && player.cloak <= 0) {
     hurtPlayer();
-    if (game.state === ST.PLAY) vold.x = player.x - C.VOLD_PUSHBACK;
+    if (game.state === ST.PLAY) vold.x = player.x - game.voldGap * 0.95;
   }
 }
 
@@ -1440,11 +1558,23 @@ function updateSpells(dt) {
       }
     }
 
-    if (s.life <= 0 || s.y > WORLD_H + 30 || s.x > cam.x + VW + 200 || s.x < cam.x - 260) { s.on = false; continue; }
+    if (s.life <= 0 || s.y > WORLD_H + 30 || s.x > cam.x + view.w + 200 || s.x < cam.x - 300) { s.on = false; continue; }
+
+    // near-miss tracking: squeaking past a bolt is rewarded (Alto's Adventure)
+    if (s.x + s.w > player.x - 2 && s.x < player.x + player.w + 2) {
+      var dv = (s.y > player.y + player.h) ? s.y - (player.y + player.h)
+             : ((s.y + s.h < player.y) ? player.y - (s.y + s.h) : 0);
+      if (dv < s.md) s.md = dv;
+    } else if (!s.scored && s.x > player.x + player.w + 2 && s.md < CONFIG.NEAR_MISS_DIST && s.md > 0) {
+      s.scored = true;
+      addScore(CONFIG.PTS_NEAR_MISS, player.x, player.y - 12, true);
+      spawnFloater('Knapp!', player.x - 6, player.y - 22, '#8ff0b4');
+      Audio2.nearMiss();
+    }
 
     if (player.cloak <= 0 && player.invuln <= 0 && aabb(s, player)) {
       s.on = false;
-      burst(s.x + 4, s.y + 4, '#ffd0a0', 10, 2.2);
+      burst(s.x + 4, s.y + 4, '#ffd0a0', 12, 2.4);
       Audio2.spellHit();
       hurtPlayer();
     }
@@ -1469,7 +1599,7 @@ function updateFoes(dt) {
   for (var i = 0; i < level.foes.length; i++) {
     var f = level.foes[i];
     if (!f.alive) { if (f.dead > 0) { f.dead -= dt; f.y += 1.4; } continue; }
-    if (f.x < cam.x - 120 || f.x > cam.x + VW + 140) continue;   // sleep off-screen
+    if (f.x < cam.x - 120 || f.x > cam.x + view.w + 140) continue;   // sleep off-screen
 
     if (f.t === 'tod') {
       f.anim += dt * 5;
@@ -1491,19 +1621,29 @@ function updateFoes(dt) {
     if (f.t === 'tod' && player.vy > 0.6 && (player.y + player.h) - f.y < 10) {
       f.alive = false; f.dead = 0.6;
       player.vy = CONFIG.STOMP_BOUNCE;
-      addScore(CONFIG.PTS_TODESSER, f.x + 6, f.y);
+      addScore(CONFIG.PTS_TODESSER, f.x + 6, f.y, true);
       Audio2.stomp();
-      burst(f.x + 6, f.y + 6, '#c8bda6', 10, 2);
+      game.freeze = CONFIG.HITSTOP_STOMP;
+      game.shake = Math.max(game.shake, 0.12);
+      burst(f.x + 6, f.y + 6, '#c8bda6', 12, 2.2);
     } else if (player.cloak <= 0) {
       hurtPlayer();
     }
   }
 }
 
-function addScore(n, x, y) {
-  game.score += n;
+// `chain` marks pickups that feed the combo multiplier (Alto / Subway Surfers)
+function addScore(n, x, y, chain) {
+  if (chain) {
+    game.combo = Math.min(CONFIG.COMBO_MAX, game.combo + 1);
+    game.comboT = CONFIG.COMBO_TIME;
+    if (game.combo > 1) Audio2.combo(game.combo);
+  }
+  var total = n * (chain ? Math.max(1, game.combo) : 1);
+  game.score += total;
   if (game.score > game.highscore) game.highscore = game.score;
-  if (x !== undefined) spawnFloater('+' + n, x, y, '#ffe680');
+  if (x !== undefined) spawnFloater('+' + total, x, y, chain && game.combo > 1 ? '#ffb347' : '#ffe680');
+  return total;
 }
 
 function updateItems(dt) {
@@ -1516,8 +1656,8 @@ function updateItems(dt) {
     if (player.x < c.x + c.w && player.x + player.w > c.x &&
         player.y < c.y + 12 && player.y + player.h > c.y - 4) {
       c.got = true;
-      addScore(CONFIG.PTS_SCHNATZ);
-      spawnFloater('Goldener Schnatz', c.x - 16, c.y - 8, '#ffe680');
+      addScore(CONFIG.PTS_SCHNATZ, c.x - 4, c.y - 8, true);
+      if (game.combo < 2) spawnFloater('Goldener Schnatz', c.x - 22, c.y - 16, '#ffe680');
       Audio2.coin();
       burst(c.x + 5, c.y + 3, '#ffe680', 8, 1.8);
     }
@@ -1528,8 +1668,8 @@ function updateItems(dt) {
     if (Math.abs(c.x - player.x) > 40) continue;
     if (aabb(c, player)) {
       c.got = true;
-      addScore(CONFIG.PTS_STAR);
-      spawnFloater('Zauberstab-Stern', c.x - 20, c.y - 8, '#ffd23c');
+      addScore(CONFIG.PTS_STAR, c.x - 4, c.y - 10, true);
+      spawnFloater('Zauberstab-Stern', c.x - 26, c.y - 20, '#ffd23c');
       Audio2.star();
       burst(c.x + 4, c.y + 4, '#ffd23c', 14, 2.4);
     }
@@ -1545,7 +1685,7 @@ function updateItems(dt) {
       else if (c.t === 'cloak') { player.cloak = CONFIG.CLOAK_TIME; spawnFloater('Tarnumhang', c.x - 10, c.y - 10, '#bcd8f8'); burst(c.x + 6, c.y + 6, '#bcd8f8', 12, 2.2); }
       else {
         if (game.lives < CONFIG.MAX_LIVES) game.lives++;
-        else addScore(CONFIG.PTS_SCHNATZ);
+        else addScore(CONFIG.PTS_SCHNATZ, c.x, c.y - 8);
         spawnFloater('Schokofrosch', c.x - 12, c.y - 10, '#e8a86a');
         burst(c.x + 6, c.y + 6, '#e8a86a', 12, 2.2);
       }
@@ -1588,19 +1728,24 @@ function clearTransients() {
 function startLevel(idx) {
   game.levelIndex = idx;
   game.time = 0;
-  game.shake = 0;
+  game.shake = 0; game.freeze = 0;
+  game.combo = 0; game.comboT = 0;
+  game.banner = 2.6;
   clearTransients();
   buildLevel(idx);
   resetPlayer(true);
   resetVoldemort();
-  cam.x = clamp(player.x - CONFIG.CAM_OFFSET, 0, Math.max(0, level.widthPx - VW));
+  cam.x = clamp(player.x - view.w * CONFIG.CAM_LEAD, 0, Math.max(0, level.widthPx - view.w));
+  cam.y = playH() >= WORLD_H ? WORLD_H - playH() : clamp(player.y - playH() * CONFIG.CAM_EYE, 0, WORLD_H - playH());
   game.state = ST.PLAY;
   UI.showPauseButton();
 }
 
 function newGame() {
+  var d = diffData();
   game.score = 0;
-  game.lives = CONFIG.MAX_LIVES;
+  game.maxLives = d.lives;
+  game.lives = d.lives;
   startLevel(0);
 }
 
@@ -1640,8 +1785,15 @@ function update(dt) {
     updateParticles(dt);
     return;
   }
+  if (game.freeze > 0) {          // hit-stop: the world holds, the sparks do not
+    game.freeze -= dt;
+    updateParticles(dt);
+    return;
+  }
   game.time += dt;
   if (game.shake > 0) game.shake -= dt;
+  if (game.comboT > 0) { game.comboT -= dt; if (game.comboT <= 0) game.combo = 0; }
+  if (game.banner > 0) game.banner -= dt;
 
   updateMovers();
   updatePlayer(dt);
@@ -1652,19 +1804,33 @@ function update(dt) {
   updateItems(dt);
   updateParticles(dt);
 
-  var target = clamp(player.x - CONFIG.CAM_OFFSET, 0, Math.max(0, level.widthPx - VW));
-  cam.x += (target - cam.x) * Math.min(1, dt * 12);
+  // camera: look-ahead horizontally, gentle vertical follow when the view is
+  // shorter than the world (landscape); in portrait the whole world fits.
+  var tx = clamp(player.x - view.w * CONFIG.CAM_LEAD, 0, Math.max(0, level.widthPx - view.w));
+  cam.x += (tx - cam.x) * Math.min(1, dt * CONFIG.CAM_LERP);
   if (cam.x < 0) cam.x = 0;
-  cam.y = WORLD_H - VH;
+  var ph = playH();
+  if (ph >= WORLD_H) {
+    cam.y = WORLD_H - ph;               // whole world fits; keep it clear of the pads
+  } else {
+    var ty2 = clamp(player.y + player.h - ph * CONFIG.CAM_EYE, 0, WORLD_H - ph);
+    cam.y += (ty2 - cam.y) * Math.min(1, dt * CONFIG.CAM_LERP * 0.6);
+  }
 }
 
 // --- RENDER -------------------------------------------------------------
+// The canvas has no fixed resolution: `view` is the window of the world we
+// show, recomputed on every resize, and the backing store matches it 1:1 in
+// world pixels. That is what keeps sprites big on a phone.
 var canvas = document.getElementById('game');
 var ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-var BG = {};      // theme -> {sky, l1, l2, l3}
-var TILES = {};   // theme -> {top, fill}
+var BG_W = 512, BG_H = 512;   // parallax layers are tiled horizontally
+var BG = {};                  // theme -> {sky, l1, l2, l3}
+var TILES = {};               // theme -> {top, fill}
+var hudScale = 1;
+function camYRef2() { return camYRef(); }
 
 function pixCircle(g, cx, cy, r) {
   for (var y = -r; y <= r; y++) {
@@ -1674,8 +1840,8 @@ function pixCircle(g, cx, cy, r) {
 }
 function wrapRect(g, x, y, w, h) {
   g.fillRect(x, y, w, h);
-  if (x + w > VW) g.fillRect(x - VW, y, w, h);
-  if (x < 0) g.fillRect(x + VW, y, w, h);
+  if (x + w > BG_W) g.fillRect(x - BG_W, y, w, h);
+  if (x < 0) g.fillRect(x + BG_W, y, w, h);
 }
 function stepTriangle(g, cx, baseY, halfW, height) {
   var steps = Math.max(3, Math.round(height / 4));
@@ -1706,101 +1872,150 @@ function buildTiles(name, th) {
   TILES[name] = { top: top, fill: fill };
 }
 
+// Layers are drawn with their bottom edge on the world's ground line, so the
+// backdrop keeps working whatever slice of the world the camera shows.
 function buildBackdrop(name, th) {
-  var sky = makeCanvas(VW, VH), s = sky.getContext('2d');
-  var grd = s.createLinearGradient(0, 0, 0, VH);
+  var sky = makeCanvas(8, BG_H), s = sky.getContext('2d');
+  var grd = s.createLinearGradient(0, 0, 0, BG_H);
   grd.addColorStop(0, th.sky[0]); grd.addColorStop(0.55, th.sky[1]); grd.addColorStop(1, th.sky[2]);
-  s.fillStyle = grd; s.fillRect(0, 0, VW, VH);
-  var rr = seeded(name.length * 7717 + 31);
-  if (name !== 'castle') {
-    s.fillStyle = 'rgba(230,240,255,0.55)';
-    for (var i = 0; i < 60; i++) s.fillRect((rr() * VW) | 0, (rr() * 120) | 0, 1, 1);
-  }
-  if (name === 'forest') { s.fillStyle = '#dfe8d0'; pixCircle(s, 392, 46, 13); s.fillStyle = th.sky[1]; pixCircle(s, 386, 42, 12); }
-  if (name === 'ministry') {
-    s.fillStyle = 'rgba(70,255,160,0.06)';
-    for (var q = 0; q < 6; q++) s.fillRect(q * 80 + 20, 0, 26, VH);
-  }
+  s.fillStyle = grd; s.fillRect(0, 0, 8, BG_H);
 
-  var l1 = makeCanvas(VW, VH), a = l1.getContext('2d');
-  var l2 = makeCanvas(VW, VH), b = l2.getContext('2d');
-  var l3 = makeCanvas(VW, VH), c = l3.getContext('2d');
-  var r1 = seeded(1234 + name.length), r2 = seeded(9876 + name.length * 3), x, w, h;
+  var l1 = makeCanvas(BG_W, BG_H), a = l1.getContext('2d');
+  var l2 = makeCanvas(BG_W, BG_H), b = l2.getContext('2d');
+  var l3 = makeCanvas(BG_W, BG_H), c = l3.getContext('2d');
+  var r1 = seeded(1234 + name.length), r2 = seeded(9876 + name.length * 3), x, w, h, k;
+  var GY = BG_H - 32;          // where the world's ground line sits in a layer
+
+  if (name !== 'castle') {
+    a.fillStyle = 'rgba(230,240,255,0.6)';
+    for (k = 0; k < 90; k++) a.fillRect((r1() * BG_W) | 0, (r1() * (GY - 120)) | 0, 1, 1);
+  }
+  if (name === 'forest') {
+    a.fillStyle = '#dfe8d0'; pixCircle(a, 402, 70, 15);
+    a.fillStyle = th.sky[1]; pixCircle(a, 394, 64, 14);
+  }
 
   if (name === 'castle') {
     a.fillStyle = th.far;
-    for (x = -10; x < VW + 30; x += 34 + ((r1() * 22) | 0)) {
-      w = 20 + ((r1() * 16) | 0); h = 70 + ((r1() * 74) | 0);
-      wrapRect(a, x, VH - 60 - h, w, h + 60);
-      stepTriangle(a, x + (w >> 1), VH - 60 - h, (w >> 1) + 2, 24);
+    for (x = -10; x < BG_W + 30; x += 34 + ((r1() * 22) | 0)) {
+      w = 20 + ((r1() * 16) | 0); h = 120 + ((r1() * 120) | 0);
+      wrapRect(a, x, GY - h, w, h + 40);
+      stepTriangle(a, x + (w >> 1), GY - h, (w >> 1) + 2, 26);
     }
     a.fillStyle = 'rgba(255,190,110,0.30)';
-    for (var k = 0; k < 26; k++) wrapRect(a, (r1() * VW) | 0, 90 + ((r1() * 90) | 0), 2, 3);
+    for (k = 0; k < 44; k++) wrapRect(a, (r1() * BG_W) | 0, GY - 200 + ((r1() * 170) | 0), 2, 3);
 
     b.fillStyle = th.mid;
-    for (x = -20; x < VW + 40; x += 58 + ((r2() * 26) | 0)) {
-      w = 34 + ((r2() * 22) | 0); h = 46 + ((r2() * 54) | 0);
-      wrapRect(b, x, VH - 40 - h, w, h + 40);
-      stepTriangle(b, x + (w >> 1), VH - 40 - h, (w >> 1) + 2, 22);
+    for (x = -20; x < BG_W + 40; x += 58 + ((r2() * 26) | 0)) {
+      w = 34 + ((r2() * 22) | 0); h = 80 + ((r2() * 110) | 0);
+      wrapRect(b, x, GY - h, w, h + 32);
+      stepTriangle(b, x + (w >> 1), GY - h, (w >> 1) + 2, 24);
     }
     b.fillStyle = 'rgba(255,170,80,0.55)';
-    for (var k2 = 0; k2 < 22; k2++) wrapRect(b, (r2() * VW) | 0, 140 + ((r2() * 80) | 0), 3, 4);
+    for (k = 0; k < 30; k++) wrapRect(b, (r2() * BG_W) | 0, GY - 150 + ((r2() * 130) | 0), 3, 4);
     c.fillStyle = th.near;
-    for (x = 0; x < VW; x += 74) { wrapRect(c, x, VH - 52, 16, 52); wrapRect(c, x - 3, VH - 56, 22, 5); }
+    for (x = 0; x < BG_W; x += 74) { wrapRect(c, x, GY - 52, 16, 60); wrapRect(c, x - 3, GY - 56, 22, 5); }
   } else if (name === 'forest') {
     a.fillStyle = th.far;
-    for (x = -10; x < VW + 30; x += 22 + ((r1() * 14) | 0)) {
-      h = 80 + ((r1() * 70) | 0);
-      stepTriangle(a, x, VH - 40, 13 + ((r1() * 7) | 0), h);
-      wrapRect(a, x - 2, VH - 46, 4, 46);
+    for (x = -10; x < BG_W + 30; x += 22 + ((r1() * 14) | 0)) {
+      h = 130 + ((r1() * 110) | 0);
+      stepTriangle(a, x, GY - 6, 13 + ((r1() * 7) | 0), h);
+      wrapRect(a, x - 2, GY - 12, 4, 20);
     }
     b.fillStyle = th.mid;
-    for (x = -14; x < VW + 40; x += 40 + ((r2() * 22) | 0)) {
-      h = 110 + ((r2() * 80) | 0);
-      stepTriangle(b, x, VH - 24, 20 + ((r2() * 10) | 0), h);
-      wrapRect(b, x - 3, VH - 30, 7, 30);
+    for (x = -14; x < BG_W + 40; x += 40 + ((r2() * 22) | 0)) {
+      h = 180 + ((r2() * 120) | 0);
+      stepTriangle(b, x, GY + 8, 20 + ((r2() * 10) | 0), h);
+      wrapRect(b, x - 3, GY, 7, 20);
     }
     c.fillStyle = th.near;
-    for (x = 0; x < VW; x += 46) { stepTriangle(c, x, VH, 16, 54); }
+    for (x = 0; x < BG_W; x += 46) stepTriangle(c, x, GY + 30, 16, 70);
     c.fillStyle = 'rgba(140,240,180,0.25)';
-    for (var m = 0; m < 18; m++) wrapRect(c, (r2() * VW) | 0, VH - 60 + ((r2() * 50) | 0), 2, 2);
+    for (k = 0; k < 26; k++) wrapRect(c, (r2() * BG_W) | 0, GY - 70 + ((r2() * 60) | 0), 2, 2);
   } else {
     a.fillStyle = th.far;
-    for (x = -10; x < VW + 30; x += 46) {
-      wrapRect(a, x, 40, 14, VH - 40);
-      wrapRect(a, x - 3, 34, 20, 8);
-      stepTriangle(a, x + 7, 34, 12, 18);
+    for (x = -10; x < BG_W + 30; x += 46) {
+      wrapRect(a, x, GY - 300, 14, 320);
+      wrapRect(a, x - 3, GY - 308, 20, 8);
+      stepTriangle(a, x + 7, GY - 308, 12, 20);
     }
     a.fillStyle = 'rgba(70,255,160,0.14)';
-    for (x = -10; x < VW + 30; x += 46) wrapRect(a, x + 4, 52, 6, VH - 70);
+    for (x = -10; x < BG_W + 30; x += 46) wrapRect(a, x + 4, GY - 280, 6, 250);
     b.fillStyle = th.mid;
-    for (x = -20; x < VW + 40; x += 78) {
-      wrapRect(b, x, 24, 26, VH - 24);
-      wrapRect(b, x - 5, 16, 36, 10);
+    for (x = -20; x < BG_W + 40; x += 78) {
+      wrapRect(b, x, GY - 340, 26, 360);
+      wrapRect(b, x - 5, GY - 350, 36, 12);
     }
     b.fillStyle = 'rgba(70,255,160,0.20)';
-    for (x = -20; x < VW + 40; x += 78) wrapRect(b, x + 9, 40, 8, 44);
+    for (x = -20; x < BG_W + 40; x += 78) wrapRect(b, x + 9, GY - 310, 8, 60);
     c.fillStyle = th.near;
-    for (x = 0; x < VW; x += 96) { wrapRect(c, x, VH - 66, 22, 66); wrapRect(c, x - 4, VH - 72, 30, 7); }
+    for (x = 0; x < BG_W; x += 96) { wrapRect(c, x, GY - 66, 22, 74); wrapRect(c, x - 4, GY - 72, 30, 7); }
   }
   BG[name] = { sky: sky, l1: l1, l2: l2, l3: l3 };
 }
 
-function initGraphics() {
-  initSprites();
-  initFX();
-  for (var k in THEMES) {
-    if (!THEMES.hasOwnProperty(k)) continue;
-    buildTiles(k, THEMES[k]);
-    buildBackdrop(k, THEMES[k]);
-  }
-}
+// --- SKY DECOR ----------------------------------------------------------
+// Portrait phones see a lot of air, so the air gets its own life: floating
+// candles over Hogwarts, fireflies in the forest, memos in the ministry.
+var DEC_W = 320, DECOR = {}, DECOR_SPR = {};
+function buildDecorSprites() {
+  var cv, g;
+  cv = makeCanvas(5, 11); g = cv.getContext('2d');
+  g.fillStyle = '#e8dcc0'; g.fillRect(1, 4, 3, 7);
+  g.fillStyle = '#c8b894'; g.fillRect(3, 4, 1, 7);
+  g.fillStyle = '#ffb347'; g.fillRect(2, 1, 1, 3);
+  g.fillStyle = '#fff0c0'; g.fillRect(2, 2, 1, 1);
+  DECOR_SPR.candle = cv;
 
-function drawLayer(img, px) {
-  var off = -(cam.x * px) % VW;
-  if (off > 0) off -= VW;
-  ctx.drawImage(img, Math.round(off), 0);
-  ctx.drawImage(img, Math.round(off) + VW, 0);
+  cv = makeCanvas(9, 6); g = cv.getContext('2d');
+  g.fillStyle = '#b9a7e8'; g.fillRect(0, 1, 7, 1); g.fillRect(1, 2, 6, 1);
+  g.fillRect(2, 3, 5, 1); g.fillRect(3, 4, 4, 1);
+  g.fillStyle = '#e6ddff'; g.fillRect(0, 1, 4, 1);
+  DECOR_SPR.memo = cv;
+
+  cv = makeCanvas(3, 3); g = cv.getContext('2d');
+  g.fillStyle = '#c8ffb0'; g.fillRect(1, 0, 1, 3); g.fillRect(0, 1, 3, 1);
+  DECOR_SPR.fly = cv;
+
+  cv = makeCanvas(11, 5); g = cv.getContext('2d');
+  g.fillStyle = '#1b2b22'; g.fillRect(4, 1, 3, 2);
+  g.fillRect(1, 0, 3, 1); g.fillRect(7, 0, 3, 1);
+  g.fillRect(0, 1, 2, 1); g.fillRect(9, 1, 2, 1);
+  DECOR_SPR.bat = cv;
+}
+function buildDecor(name) {
+  var r = seeded(4242 + name.length * 13), list = [], i;
+  var kind = name === 'castle' ? 'candle' : (name === 'forest' ? 'fly' : 'memo');
+  var n = name === 'forest' ? 26 : 18;
+  for (i = 0; i < n; i++) {
+    list.push({
+      x: r() * DEC_W,
+      y: WORLD_H - 120 - r() * 250,
+      ph: r() * 6.28,
+      amp: 3 + r() * 5,
+      k: (name === 'forest' && i % 7 === 0) ? 'bat' : kind,
+      glow: name === 'castle' ? 'torch_castle' : null
+    });
+  }
+  DECOR[name] = list;
+}
+function drawDecor(name, t) {
+  var list = DECOR[name]; if (!list) return;
+  var pv = 0.5, camYRef = camYRef2();
+  var yShift = -cam.y * pv - (1 - pv) * camYRef + camYRef;
+  var base = -(cam.x * pv) % DEC_W;
+  if (base > 0) base -= DEC_W;
+  for (var i = 0; i < list.length; i++) {
+    var d = list[i], img = DECOR_SPR[d.k];
+    var sy = Math.round(d.y + yShift + Math.sin(t * 0.9 + d.ph) * d.amp);
+    if (sy < -20 || sy > view.h + 20) continue;
+    for (var x = base + d.x; x < view.w + DEC_W; x += DEC_W) {
+      var sx = Math.round(x + Math.sin(t * 0.3 + d.ph) * 5);
+      if (sx < -20 || sx > view.w + 20) continue;
+      if (d.glow) drawGlow(d.glow, sx + 2, sy + 4, 0.5);
+      ctx.drawImage(img, sx, sy);
+    }
+  }
 }
 
 // --- FX SPRITES ---------------------------------------------------------
@@ -1840,7 +2055,7 @@ function initFX() {
   FX.vold = makeGlow('rgba(120,30,170,', 19);
   FX.dementor = makeGlow('rgba(70,150,200,', 15);
   FX.power = makeGlow('rgba(255,246,210,', 12);
-  FX.portal = makeGlow('rgba(120,210,255,', 26);
+  FX.portal = makeGlow('rgba(120,210,255,', 30);
   FX.avada = makeGlow('rgba(90,255,80,', 13);
   FX.expelli = makeGlow('rgba(255,90,60,', 11);
   FX.crucio = makeGlow('rgba(170,90,255,', 12);
@@ -1861,6 +2076,30 @@ function drawGlow(key, cx, cy, alpha) {
 function drawCentered(cv, cx, cy) {
   ctx.drawImage(cv, Math.round(cx - cv.width / 2), Math.round(cy - cv.height / 2));
 }
+
+function initGraphics() {
+  initSprites();
+  initFX();
+  buildDecorSprites();
+  for (var k in THEMES) {
+    if (!THEMES.hasOwnProperty(k)) continue;
+    buildTiles(k, THEMES[k]);
+    buildBackdrop(k, THEMES[k]);
+    buildDecor(k);
+  }
+}
+
+// horizontal wrap + vertical parallax anchored to the world's ground line
+function drawLayer(img, px, pv) {
+  var camYRef = camYRef2();
+  var bottom = WORLD_H - cam.y * pv - (1 - pv) * camYRef;
+  var y = Math.round(bottom - BG_H);
+  var off = -(cam.x * px) % BG_W;
+  if (off > 0) off -= BG_W;
+  off = Math.round(off);
+  for (var x = off; x < view.w; x += BG_W) ctx.drawImage(img, x, y);
+}
+
 function drawTorch(x, y, theme, t) {
   var th = THEMES[theme];
   var fl = Math.sin(t * 9 + x) * 0.5 + Math.sin(t * 5.3 + x * 0.7) * 0.5;
@@ -1872,30 +2111,44 @@ function drawTorch(x, y, theme, t) {
 }
 
 function drawWorld(t) {
-  var th = level.theme;
+  var th = level.theme, name = level.data.theme;
   var i, k;
 
-  // parallax background
-  ctx.drawImage(BG[level.data.theme].sky, 0, 0);
-  drawLayer(BG[level.data.theme].l1, 0.20);
-  drawLayer(BG[level.data.theme].l2, 0.45);
-  drawLayer(BG[level.data.theme].l3, 0.72);
+  var camYRef = camYRef2();
+  var skyBottom = WORLD_H - cam.y * 0.08 - 0.92 * camYRef;
+  ctx.drawImage(BG[name].sky, 0, 0, 8, BG_H, 0, Math.round(skyBottom - BG_H), view.w, BG_H);
+  drawLayer(BG[name].l1, 0.20, 0.20);
+  drawLayer(BG[name].l2, 0.45, 0.45);
+  drawDecor(name, t);
+  drawLayer(BG[name].l3, 0.72, 0.75);
+
+  // below the world's floor: solid rock, so a tall portrait view does not end
+  // in an empty band of sky colour
+  var floorY = Math.round(WORLD_H - cam.y);
+  if (floorY < view.h) {
+    ctx.fillStyle = th.dark;
+    ctx.fillRect(0, floorY, view.w, view.h - floorY);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, floorY, view.w, view.h - floorY);
+  }
 
   ctx.save();
   var sx = 0, sy = 0;
-  if (game.shake > 0) { sx = rnd(-2, 2) * game.shake * 3; sy = rnd(-2, 2) * game.shake * 3; }
+  if (game.shake > 0) { sx = rnd(-2, 2) * game.shake * 4; sy = rnd(-2, 2) * game.shake * 4; }
   ctx.translate(Math.round(-cam.x + sx), Math.round(-cam.y + sy));
 
   // tiles
   var tx0 = Math.max(0, Math.floor(cam.x / T) - 1);
-  var tx1 = Math.min(level.cols - 1, Math.floor((cam.x + VW) / T) + 1);
-  var tset = TILES[level.data.theme];
+  var tx1 = Math.min(level.cols - 1, Math.floor((cam.x + view.w) / T) + 1);
+  var ty0 = Math.max(0, Math.floor(cam.y / T));
+  var ty1 = Math.min(ROWS - 1, Math.floor((cam.y + view.h) / T));
+  var tset = TILES[name];
   for (var tx = tx0; tx <= tx1; tx++) {
-    for (var ty = 0; ty < ROWS; ty++) {
+    for (var ty = ty0; ty <= ty1; ty++) {
       if (level.grid[ty * level.cols + tx] !== 1) continue;
       var open = !solidAt(tx, ty - 1);
       ctx.drawImage(open ? tset.top : tset.fill, tx * T, ty * T);
-      if (open && ty === GROUND_ROW && (tx % 11) === 4) drawTorch(tx * T, ty * T - 12, level.data.theme, t);
+      if (open && ty === GROUND_ROW && (tx % 11) === 4) drawTorch(tx * T, ty * T - 12, name, t);
     }
   }
 
@@ -1912,21 +2165,21 @@ function drawWorld(t) {
   // Teufelsschlinge
   for (i = 0; i < level.hazards.length; i++) {
     var hz = level.hazards[i];
-    if (hz.x < cam.x - 20 || hz.x > cam.x + VW + 20) continue;
+    if (hz.x < cam.x - 20 || hz.x > cam.x + view.w + 20) continue;
     ctx.fillStyle = '#1d3a20';
-    ctx.fillRect(hz.x, hz.y + 5, 16, 4);
+    ctx.fillRect(hz.x - 2, hz.y + 4, 16, 4);
     for (k = 0; k < 5; k++) {
-      var vx = hz.x + 1 + k * 3;
+      var vx = hz.x - 1 + k * 3;
       var vh = 5 + Math.round(Math.sin(hz.ph + k) * 2) + 3;
-      ctx.fillStyle = '#2f6b34'; ctx.fillRect(vx, hz.y + 9 - vh, 2, vh);
-      ctx.fillStyle = '#8fd07a'; ctx.fillRect(vx, hz.y + 9 - vh, 1, 2);
-      ctx.fillStyle = '#c8e88a'; ctx.fillRect(vx, hz.y + 9 - vh - 1, 1, 1);
+      ctx.fillStyle = '#2f6b34'; ctx.fillRect(vx, hz.y + 8 - vh, 2, vh);
+      ctx.fillStyle = '#8fd07a'; ctx.fillRect(vx, hz.y + 8 - vh, 1, 2);
+      ctx.fillStyle = '#c8e88a'; ctx.fillRect(vx, hz.y + 8 - vh - 1, 1, 1);
     }
   }
 
   // portal
   var p = level.portal;
-  if (p.x > cam.x - 60 && p.x < cam.x + VW + 60) {
+  if (p.x > cam.x - 60 && p.x < cam.x + view.w + 60) {
     drawGlow('portal', p.x + p.w / 2, p.y + p.h / 2, 0.9);
     ctx.fillStyle = th.dark; ctx.fillRect(p.x - 4, p.y - 4, p.w + 8, p.h + 4);
     ctx.fillStyle = th.mid2; ctx.fillRect(p.x - 3, p.y - 3, p.w + 6, p.h + 3);
@@ -1945,22 +2198,21 @@ function drawWorld(t) {
   // collectibles
   for (i = 0; i < level.coins.length; i++) {
     var c = level.coins[i];
-    if (c.got || c.x < cam.x - 20 || c.x > cam.x + VW + 20) continue;
+    if (c.got || c.x < cam.x - 20 || c.x > cam.x + view.w + 20) continue;
     var by = Math.round(Math.sin(c.ph) * 2.5);
     var sp = (Math.floor(c.ph * 3) % 2) ? SPR.snitch2 : SPR.snitch;
     ctx.drawImage(sp.r, Math.round(c.x), Math.round(c.y + by));
   }
   for (i = 0; i < level.stars.length; i++) {
     var st = level.stars[i];
-    if (st.got || st.x < cam.x - 20 || st.x > cam.x + VW + 20) continue;
-    var pulse = 0.7 + Math.sin(st.ph) * 0.3;
-    ctx.globalAlpha = pulse;
+    if (st.got || st.x < cam.x - 20 || st.x > cam.x + view.w + 20) continue;
+    ctx.globalAlpha = 0.7 + Math.sin(st.ph) * 0.3;
     ctx.drawImage(SPR.star.r, Math.round(st.x), Math.round(st.y + Math.sin(st.ph * 0.7) * 2));
     ctx.globalAlpha = 1;
   }
   for (i = 0; i < level.powers.length; i++) {
     var pw = level.powers[i];
-    if (pw.got || pw.x < cam.x - 24 || pw.x > cam.x + VW + 24) continue;
+    if (pw.got || pw.x < cam.x - 24 || pw.x > cam.x + view.w + 24) continue;
     var oy = Math.round(Math.sin(pw.ph) * 2);
     var img = pw.t === 'nimbus' ? SPR.nimbus : (pw.t === 'cloak' ? SPR.cloak : SPR.frog);
     drawGlow('power', pw.x + 6, pw.y + oy + img.h / 2, 0.8);
@@ -1970,7 +2222,7 @@ function drawWorld(t) {
   // enemies
   for (i = 0; i < level.foes.length; i++) {
     var f = level.foes[i];
-    if (f.x < cam.x - 40 || f.x > cam.x + VW + 40) continue;
+    if (f.x < cam.x - 40 || f.x > cam.x + view.w + 40) continue;
     if (!f.alive) {
       if (f.dead > 0) { ctx.globalAlpha = Math.max(0, f.dead / 0.6); ctx.drawImage(SPR.todesser.r, Math.round(f.x), Math.round(f.y)); ctx.globalAlpha = 1; }
       continue;
@@ -1987,30 +2239,19 @@ function drawWorld(t) {
     }
   }
 
-  // Voldemort
   drawVoldemort(t);
 
   // spells
   for (i = 0; i < spells.length; i++) {
     var s = spells[i]; if (!s.on) continue;
-    var X = Math.round(s.x), Y = Math.round(s.y);
-    var mx = X + s.w / 2, my = Y + s.h / 2;
-    if (s.t === 'avada') {
-      drawGlow('avada', mx, my, 0.85);
-      drawCentered(FX.bolt_avada, mx, my);
-    } else if (s.t === 'expelli') {
-      drawGlow('expelli', mx, my, 0.85);
-      drawCentered(FX.bolt_expelli, mx, my);
-    } else {
-      drawGlow('crucio', mx, my, 0.7 + Math.sin(s.ph) * 0.25);
-      drawCentered(FX.bolt_crucio, mx, my);
-    }
+    var mx = s.x + s.w / 2, my = s.y + s.h / 2;
+    if (s.t === 'avada') { drawGlow('avada', mx, my, 0.85); drawCentered(FX.bolt_avada, mx, my); }
+    else if (s.t === 'expelli') { drawGlow('expelli', mx, my, 0.85); drawCentered(FX.bolt_expelli, mx, my); }
+    else { drawGlow('crucio', mx, my, 0.7 + Math.sin(s.ph) * 0.25); drawCentered(FX.bolt_crucio, mx, my); }
   }
 
-  // player
   drawPlayer();
 
-  // particles
   for (i = 0; i < particles.length; i++) {
     var pt = particles[i]; if (!pt.on) continue;
     ctx.globalAlpha = Math.max(0, Math.min(1, pt.life / pt.max));
@@ -2019,31 +2260,31 @@ function drawWorld(t) {
   }
   ctx.globalAlpha = 1;
 
-  // floating labels
   for (i = 0; i < floaters.length; i++) {
     var fl = floaters[i]; if (!fl.on) continue;
     ctx.globalAlpha = Math.max(0, Math.min(1, fl.life / 1.2));
-    drawText(ctx, fl.txt, Math.round(fl.x), Math.round(fl.y), fl.c, 1, '#000');
+    // keep labels inside the visible window – on a narrow phone view they
+    // would otherwise be cut off at the edges
+    var fw = textWidth(fl.txt, 1);
+    var fx = clamp(fl.x, cam.x + 3, cam.x + view.w - fw - 3);
+    drawText(ctx, fl.txt, Math.round(fx), Math.round(fl.y), fl.c, 1, '#000');
     ctx.globalAlpha = 1;
   }
 
   ctx.restore();
 
-  // soft fog / vignette
   ctx.fillStyle = th.fog;
-  ctx.fillRect(0, 0, VW, VH);
+  ctx.fillRect(0, 0, view.w, view.h);
 }
 
 function drawVoldemort(t) {
-  if (vold.x < cam.x - 60 || vold.x > cam.x + VW + 60) return;
+  if (vold.x < cam.x - 60 || vold.x > cam.x + view.w + 60) return;
   var vy = Math.round(vold.y + Math.sin(vold.bob) * 2.5);
   var vx = Math.round(vold.x);
   drawGlow('vold', vx + 8, vy + 13);
-  // robe wisps
   if (Math.random() < 0.5)
     spawnParticle(vx + 8 + rnd(-6, 6), vy + 22, rnd(-.4, .1), rnd(.1, .6), 0.6, '#241c33', 1, 0);
   ctx.drawImage(SPR.vold.r, vx, vy);
-  // wand tip: charges up while a spell is telegraphed
   var wx = vx + 14, wy = vy + 8;
   if (vold.cast > 0) {
     var f = 1 - vold.cast / CONFIG.SPELL_TELEGRAPH;
@@ -2072,8 +2313,6 @@ function drawPlayer() {
   var dy = Math.round(player.y + player.h - spr.h);
   if (player.cloak > 0) {
     ctx.globalAlpha = player.cloak < 1.5 && Math.floor(player.cloak * 8) % 2 === 0 ? 0.7 : 0.4;
-    ctx.fillStyle = 'rgba(180,220,255,0.10)';
-    ctx.fillRect(dx - 2, dy - 2, spr.w + 4, spr.h + 4);
   }
   ctx.drawImage(player.face > 0 ? spr.r : spr.l, dx, dy);
   ctx.globalAlpha = 1;
@@ -2090,67 +2329,96 @@ function drawBar(x, y, w, h, frac, col) {
 }
 
 function drawHUD(t) {
+  var S = hudScale, W = view.w;
+  var pad = 4 * S, lineH = 10 * S;
+  var barH = 25 * S;
+
   ctx.fillStyle = 'rgba(8,6,16,0.55)';
-  ctx.fillRect(0, 0, VW, 23);
+  ctx.fillRect(0, 0, W, barH);
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(0, 23, VW, 1);
+  ctx.fillRect(0, barH, W, 1);
 
-  drawText(ctx, 'Punkte: ' + game.score, 5, 3, '#ffe680', 1, '#000');
+  var scoreTxt = 'Punkte: ' + game.score;
+  var hsTxt = 'Highscore: ' + game.highscore;
+  var nameTxt = level.data.name;
+  // narrow phone views drop the long labels instead of letting them collide
+  var roomy = textWidth(scoreTxt, S) + textWidth(hsTxt, S) + textWidth(nameTxt, S) + 6 * pad < W;
+  if (!roomy) hsTxt = 'HS: ' + game.highscore;
 
-  // Leben
-  drawText(ctx, 'Leben:', 5, 13, '#f2e6c4', 1, '#000');
-  var hx = 5 + textWidth('Leben:', 1) + 4;
-  for (var i = 0; i < CONFIG.MAX_LIVES; i++) {
-    drawText(ctx, i < game.lives ? '♥' : '♡', hx + i * 8, 13, i < game.lives ? '#ff4a5a' : '#5a4a58', 1, '#000');
-  }
+  drawText(ctx, scoreTxt, pad, 3 * S, '#ffe680', S, '#000');
+  drawText(ctx, hsTxt, W - pad - textWidth(hsTxt, S), 3 * S, '#bfe9ff', S, '#000');
+  if (roomy) drawTextC(ctx, nameTxt, W / 2, 3 * S, '#e8d8ff', S, '#000');
 
-  var hs = 'Highscore: ' + game.highscore;
-  drawText(ctx, hs, VW - 5 - textWidth(hs, 1), 3, '#bfe9ff', 1, '#000');
-  drawTextC(ctx, level.data.name, VW / 2, 3, '#e8d8ff', 1, '#000');
+  drawText(ctx, 'Leben:', pad, 3 * S + lineH, '#f2e6c4', S, '#000');
+  var hx = pad + textWidth('Leben:', S) + 4 * S;
+  for (var i = 0; i < game.maxLives; i++)
+    drawText(ctx, i < game.lives ? '♥' : '♡', hx + i * 8 * S, 3 * S + lineH, i < game.lives ? '#ff4a5a' : '#5a4a58', S, '#000');
 
-  // Gefahr
+  // danger meter
   var gap = player.x - vold.x;
-  var danger = clamp(1 - (gap - CONFIG.VOLD_CATCH) / (CONFIG.VOLD_GAP - CONFIG.VOLD_CATCH), 0, 1);
-  var lbl = 'Gefahr';
-  var bw = 52;
-  var bx = VW - 5 - bw, by = 15;
-  drawText(ctx, lbl, bx - textWidth(lbl, 1) - 4, 13, danger > 0.7 ? '#ff6a6a' : '#f2e6c4', 1, '#000');
-  var col = danger > 0.75 ? '#ff3a3a' : (danger > 0.45 ? '#ffa23a' : '#6ade7a');
-  drawBar(bx, by, bw, 5, danger, col);
+  var danger = clamp(1 - (gap - CONFIG.VOLD_CATCH) / (game.voldGap - CONFIG.VOLD_CATCH), 0, 1);
+  var bw = 42 * S;
+  var bx = W - pad - bw, by = 4 * S + lineH;
+  var dCol = danger > 0.7 ? '#ff6a6a' : '#f2e6c4';
+  // the label shrinks to scale 1 rather than disappearing on narrow views
+  var lS = (hx + game.maxLives * 8 * S + textWidth('Gefahr', S) + 48 * S < W) ? S : 1;
+  drawText(ctx, 'Gefahr', bx - textWidth('Gefahr', lS) - 3 * S, 3 * S + lineH + (S - lS) * 3, dCol, lS, '#000');
+  drawBar(bx, by, bw, 4 * S, danger, danger > 0.75 ? '#ff3a3a' : (danger > 0.45 ? '#ffa23a' : '#6ade7a'));
   if (danger > 0.8 && Math.floor(t * 8) % 2 === 0) {
     ctx.fillStyle = 'rgba(255,40,40,0.10)';
-    ctx.fillRect(0, 0, VW, VH);
+    ctx.fillRect(0, 0, W, view.h);
+  }
+
+  // route progress: Harry and Voldemort against the portal
+  var py = barH + 3 * S, pw = W - pad * 2;
+  var goal = level.portal.x;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(pad, py, pw, 3 * S);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(pad, py, pw, 3 * S);
+  var fh = clamp(player.x / goal, 0, 1), fv = clamp(vold.x / goal, 0, 1);
+  ctx.fillStyle = 'rgba(255,214,100,0.35)'; ctx.fillRect(pad, py, Math.round(pw * fh), 3 * S);
+  ctx.fillStyle = '#8a2b8a'; ctx.fillRect(pad + Math.round(pw * fv) - S, py - S, 2 * S, 5 * S);
+  ctx.fillStyle = '#ffd964'; ctx.fillRect(pad + Math.round(pw * fh) - S, py - S, 2 * S, 5 * S);
+  ctx.fillStyle = '#7fe0ff'; ctx.fillRect(pad + pw - S, py - 2 * S, 2 * S, 7 * S);
+
+  // level title card right after the start (keeps the top bar clear on phones)
+  if (game.banner > 0 && !roomy) {
+    ctx.globalAlpha = Math.min(1, game.banner);
+    drawTextC(ctx, nameTxt, W / 2, barH + 14 * S, '#e8d8ff', S, '#000');
+    ctx.globalAlpha = 1;
   }
 
   // power-up timers
-  var py = 27;
+  var yy = barH + (game.banner > 0 && !roomy ? 26 : 12) * S;
   if (player.nimbus > 0) {
-    drawText(ctx, 'Nimbus 2000', 5, py, '#ffd76a', 1, '#000');
-    drawBar(5 + textWidth('Nimbus 2000', 1) + 4, py + 1, 34, 4, player.nimbus / CONFIG.NIMBUS_TIME, '#ffd76a');
-    py += 9;
+    drawText(ctx, 'Nimbus 2000', pad, yy, '#ffd76a', S, '#000');
+    drawBar(pad + textWidth('Nimbus 2000', S) + 4 * S, yy + S, 26 * S, 4 * S, player.nimbus / CONFIG.NIMBUS_TIME, '#ffd76a');
+    yy += 9 * S;
   }
   if (player.cloak > 0) {
-    drawText(ctx, 'Tarnumhang', 5, py, '#bcd8f8', 1, '#000');
-    drawBar(5 + textWidth('Tarnumhang', 1) + 4, py + 1, 34, 4, player.cloak / CONFIG.CLOAK_TIME, '#bcd8f8');
+    drawText(ctx, 'Tarnumhang', pad, yy, '#bcd8f8', S, '#000');
+    drawBar(pad + textWidth('Tarnumhang', S) + 4 * S, yy + S, 26 * S, 4 * S, player.cloak / CONFIG.CLOAK_TIME, '#bcd8f8');
   }
 
-  // spell warning
-  if (vold.cast > 0 && Math.floor(t * 12) % 2 === 0) {
-    drawTextC(ctx, 'Achtung, Zauberspruch!', VW / 2, 40, '#ff7a6a', 1, '#200');
+  // combo chain
+  if (game.combo > 1) {
+    drawTextC(ctx, 'Kombo ×' + game.combo, W / 2, playH() - 26 * S, '#ffb347', S, '#301500');
+    drawBar(W / 2 - 18 * S, playH() - 16 * S, 36 * S, 3 * S, game.comboT / CONFIG.COMBO_TIME, '#ffb347');
   }
+
+  if (vold.cast > 0 && Math.floor(t * 12) % 2 === 0)
+    drawTextC(ctx, 'Achtung, Zauberspruch!', W / 2, view.h * 0.3, '#ff7a6a', S, '#200');
 }
 
 function render(t) {
   ctx.imageSmoothingEnabled = false;
   if (game.state === ST.MENU || !level.data) {
-    ctx.fillStyle = '#0a0714'; ctx.fillRect(0, 0, VW, VH);
-    if (BG.castle) {
-      ctx.drawImage(BG.castle.sky, 0, 0);
-      ctx.drawImage(BG.castle.l1, Math.round(-(t * 6) % VW), 0);
-      ctx.drawImage(BG.castle.l1, Math.round(-(t * 6) % VW) + VW, 0);
-      ctx.drawImage(BG.castle.l2, Math.round(-(t * 12) % VW), 0);
-      ctx.drawImage(BG.castle.l2, Math.round(-(t * 12) % VW) + VW, 0);
-    }
+    var m = BG.castle;
+    if (!m) { ctx.fillStyle = '#0a0714'; ctx.fillRect(0, 0, view.w, view.h); return; }
+    ctx.drawImage(m.sky, 0, 0, 8, BG_H, 0, view.h - BG_H, view.w, BG_H);
+    var o1 = Math.round(-(t * 6) % BG_W) - BG_W, x;
+    for (x = o1; x < view.w; x += BG_W) ctx.drawImage(m.l1, x, view.h - BG_H);
+    var o2 = Math.round(-(t * 13) % BG_W) - BG_W;
+    for (x = o2; x < view.w; x += BG_W) ctx.drawImage(m.l2, x, view.h - BG_H);
     return;
   }
   drawWorld(t);
@@ -2173,7 +2441,7 @@ function clearInput() {
   keyState.left = keyState.right = keyState.jump = keyState.duck = false;
   touchState.left = touchState.right = touchState.jump = touchState.duck = false;
   padState.left = padState.right = padState.jump = padState.duck = false;
-  var i; for (i = 0; i < tbtns.length; i++) tbtns[i].el.classList.remove('on');
+  for (var i = 0; i < tbtns.length; i++) tbtns[i].el.classList.remove('on');
   mergeInput();
 }
 
@@ -2192,12 +2460,12 @@ window.addEventListener('keydown', function (e) {
   else if (c === 'Space' || c === 'ArrowUp' || c === 'KeyW') keyState.jump = true;
   else if (c === 'ArrowDown' || c === 'KeyS') keyState.duck = true;
   else if (c === 'KeyP' || c === 'Escape') togglePause();
+  else if (c === 'KeyM') toggleSound();
   else if (c === 'Enter') {
     if (game.state === ST.MENU) startGameFromMenu();
     else if (game.state === ST.LEVELDONE) nextLevel();
     else if (game.state === ST.GAMEOVER || game.state === ST.WIN) startGameFromMenu();
   }
-  else if (c === 'KeyM') toggleSound();
   mergeInput();
 }, { passive: false });
 
@@ -2213,29 +2481,41 @@ window.addEventListener('keyup', function (e) {
 
 window.addEventListener('blur', clearInput);
 
-// ---- multi-touch on-screen controls ----
-var touchLayer = document.getElementById('touch');
+// ---- multi-touch: on-screen pads plus full-screen tap zones in Auto-Lauf ----
+var stage = document.getElementById('stage');
 var tbtns = [
   { el: document.getElementById('tLeft'), act: 'left', rect: null },
   { el: document.getElementById('tRight'), act: 'right', rect: null },
-  { el: document.getElementById('tJump'), act: 'jump', rect: null },
-  { el: document.getElementById('tDuck'), act: 'duck', rect: null }
+  { el: document.getElementById('tBrake'), act: 'left', rect: null },
+  { el: document.getElementById('tDuck'), act: 'duck', rect: null },
+  { el: document.getElementById('tJump'), act: 'jump', rect: null }
 ];
+var zones = [];          // virtual tap areas (auto-run one-thumb mode)
+
 function cacheTouchRects() {
-  for (var i = 0; i < tbtns.length; i++) tbtns[i].rect = tbtns[i].el.getBoundingClientRect();
+  for (var i = 0; i < tbtns.length; i++) {
+    var el = tbtns[i].el;
+    tbtns[i].rect = (el.offsetParent === null) ? null : el.getBoundingClientRect();
+  }
+}
+function inRect(r, x, y, pad) {
+  return r && x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad;
 }
 function handleTouches(e) {
+  var tgt = e.target;
+  if (tgt && tgt.closest && (tgt.closest('.screen') || tgt.closest('#tools'))) return;
   if (e.cancelable) e.preventDefault();
   firstInteraction();
-  var i, b, r, tt, hit;
+  var i, b, tt, hit;
   for (b = 0; b < tbtns.length; b++) touchState[tbtns[b].act] = false;
+  touchState.left = touchState.right = touchState.jump = touchState.duck = false;
+
   for (i = 0; i < e.touches.length; i++) {
     tt = e.touches[i];
-    for (b = 0; b < tbtns.length; b++) {
-      r = tbtns[b].rect; if (!r) continue;
-      if (tt.clientX >= r.left - 8 && tt.clientX <= r.right + 8 &&
-          tt.clientY >= r.top - 8 && tt.clientY <= r.bottom + 8) touchState[tbtns[b].act] = true;
-    }
+    for (b = 0; b < tbtns.length; b++)
+      if (inRect(tbtns[b].rect, tt.clientX, tt.clientY, 10)) touchState[tbtns[b].act] = true;
+    for (b = 0; b < zones.length; b++)
+      if (inRect(zones[b].r, tt.clientX, tt.clientY, 0)) touchState[zones[b].act] = true;
   }
   for (b = 0; b < tbtns.length; b++) {
     hit = touchState[tbtns[b].act];
@@ -2244,9 +2524,9 @@ function handleTouches(e) {
   mergeInput();
 }
 ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(function (ev) {
-  touchLayer.addEventListener(ev, handleTouches, { passive: false });
+  stage.addEventListener(ev, handleTouches, { passive: false });
 });
-touchLayer.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+stage.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
 // ---- gamepad (optional) ----
 var padPauseWas = false;
@@ -2269,7 +2549,6 @@ function pollGamepad() {
 }
 
 // --- UI -----------------------------------------------------------------
-var stage = document.getElementById('stage');
 var UI = {
   start: document.getElementById('screenStart'),
   pause: document.getElementById('screenPause'),
@@ -2298,6 +2577,10 @@ var UI = {
   showGameOver: function () {
     document.getElementById('overStats').innerHTML =
       'Punkte: <b>' + game.score + '</b><br>Highscore: <b>' + game.highscore + '</b>';
+    var tip = '';
+    if (game.diff !== 'leicht') tip = 'Tipp: Stufe „Leicht" gibt dir 5 Leben und einen langsameren Voldemort.';
+    else if (!game.autoRun) tip = 'Tipp: Mit „Auto-Lauf" läuft Harry von allein – du musst nur springen und ducken.';
+    document.getElementById('overTip').textContent = tip;
     btnPauseTop.style.display = 'none';
     this.hideAll(); this.over.classList.add('on');
   },
@@ -2311,6 +2594,101 @@ var UI = {
 
 var btnSound = document.getElementById('btnSound');
 var btnPauseTop = document.getElementById('btnPause');
+var btnAuto = document.getElementById('btnAuto');
+var btnAuto2 = document.getElementById('btnAuto2');
+var btnLayout = document.getElementById('btnLayout');
+var btnLayout2 = document.getElementById('btnLayout2');
+var fsButtons = ['btnFull', 'btnFull2', 'btnFull3'].map(function (id) { return document.getElementById(id); });
+var isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+var padBelow = true;      // portrait: thumb zone under the picture, or overlaid
+
+// ---- fullscreen (phones gain the browser chrome back as playfield) ----
+var docEl = document.documentElement;
+function fsAvailable() {
+  return !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.webkitRequestFullScreen);
+}
+function inFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function lockLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      var pr = screen.orientation.lock('landscape');
+      if (pr && pr.catch) pr.catch(function () {});
+    }
+  } catch (err) { /* not supported – harmless */ }
+}
+function toggleFullscreen() {
+  firstInteraction();
+  if (!inFullscreen()) {
+    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.webkitRequestFullScreen;
+    if (!req) return;
+    try {
+      var pr = req.call(docEl, { navigationUI: 'hide' });
+      if (pr && pr.then) pr.then(lockLandscape, function () {}); else lockLandscape();
+    } catch (err) { /* ignore */ }
+  } else {
+    var ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if (ex) try { ex.call(document); } catch (err2) { /* ignore */ }
+  }
+}
+function syncFullscreenUI() {
+  var txt = inFullscreen() ? 'Vollbild aus' : 'Vollbild';
+  fsButtons.forEach(function (b) {
+    if (!b) return;
+    b.textContent = txt;
+    b.classList.toggle('on', inFullscreen());
+    b.style.display = fsAvailable() ? '' : 'none';
+  });
+}
+['fullscreenchange', 'webkitfullscreenchange'].forEach(function (ev) {
+  document.addEventListener(ev, function () { syncFullscreenUI(); setTimeout(layout, 150); });
+});
+fsButtons.forEach(function (b) { if (b) b.addEventListener('click', toggleFullscreen); });
+
+function toggleLayout() {
+  firstInteraction();
+  padBelow = !padBelow;
+  var txt = 'Tasten: ' + (padBelow ? 'Unten' : 'Über dem Bild');
+  if (btnLayout) { btnLayout.textContent = txt; btnLayout.classList.toggle('on', !padBelow); }
+  if (btnLayout2) { btnLayout2.textContent = txt; btnLayout2.classList.toggle('on', !padBelow); }
+  clearInput();
+  layout();
+}
+if (btnLayout) btnLayout.addEventListener('click', toggleLayout);
+if (btnLayout2) btnLayout2.addEventListener('click', toggleLayout);
+
+function syncOptions() {
+  var rows = [document.getElementById('diffRow'), document.getElementById('diffRow2')];
+  rows.forEach(function (row) {
+    if (!row) return;
+    var kids = row.children;
+    for (var i = 0; i < kids.length; i++)
+      kids[i].classList.toggle('sel', kids[i].getAttribute('data-diff') === game.diff);
+  });
+  var label = 'Auto-Lauf: ' + (game.autoRun ? 'An' : 'Aus');
+  btnAuto.textContent = label; btnAuto2.textContent = label;
+  btnAuto.classList.toggle('on', game.autoRun);
+  btnAuto2.classList.toggle('on', game.autoRun);
+  document.body.classList.toggle('autorun', game.autoRun);
+  document.getElementById('hintKeys').textContent = game.autoRun
+    ? 'Harry läuft von allein · Leertaste / ↑ Springen · ↓ Ducken · ← Bremsen · P Pause'
+    : '← → Laufen · Leertaste / ↑ Springen · ↓ Ducken · P Pause';
+  document.getElementById('hintTouch').textContent = game.autoRun
+    ? 'Tippe rechts zum Springen, links zum Ducken · ‹‹ bremst'
+    : 'Nutze die Tasten unten auf dem Bildschirm';
+  layout();
+}
+function setDiff(d) { if (DIFFICULTY[d]) { game.diff = d; syncOptions(); } }
+[document.getElementById('diffRow'), document.getElementById('diffRow2')].forEach(function (row) {
+  row.addEventListener('click', function (e) {
+    var d = e.target.getAttribute && e.target.getAttribute('data-diff');
+    if (d) { firstInteraction(); setDiff(d); }
+  });
+});
+function toggleAuto() { firstInteraction(); game.autoRun = !game.autoRun; clearInput(); syncOptions(); }
+btnAuto.addEventListener('click', toggleAuto);
+btnAuto2.addEventListener('click', toggleAuto);
 
 function toggleSound() {
   firstInteraction();
@@ -2330,10 +2708,16 @@ function togglePause() {
     Audio2.resume();
   }
 }
+var hintTimer = 0;
 function startGameFromMenu() {
   firstInteraction();
+  var ph = document.getElementById('portraitHint');
+  ph.style.opacity = '1';
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(function () { ph.style.opacity = '0'; }, 7000);
   UI.hideAll();
   btnPauseTop.textContent = 'Pause';
+  clearInput();
   newGame();
   if (!Audio2.muted) Audio2.startMusic();
 }
@@ -2362,25 +2746,90 @@ document.addEventListener('visibilitychange', function () {
   if (document.hidden && game.state === ST.PLAY) togglePause();
 });
 
-// --- RESPONSIVE CANVAS --------------------------------------------------
-function resize() {
-  var vw = window.innerWidth, vh = window.innerHeight;
-  var s = Math.min(vw / VW, vh / VH);
-  var dpr = window.devicePixelRatio || 1;
-  var snapped = Math.max(1, Math.floor(s * dpr)) / dpr;   // whole device pixels = razor sharp
-  if (snapped >= s * 0.85) s = snapped;
-  stage.style.width = Math.round(VW * s) + 'px';
-  stage.style.height = Math.round(VH * s) + 'px';
-  stage.style.setProperty('--u', s + 'px');
-  document.body.classList.toggle('portrait', vh > vw);
-  cacheTouchRects();
+// --- LAYOUT / RESPONSIVE VIEW -------------------------------------------
+// The canvas is never letterboxed. We choose how much world to show and the
+// canvas backing store equals that in world pixels, so a phone simply sees a
+// smaller slice of the world at a much bigger pixel size.
+function layout() {
+  var vw = Math.max(200, window.innerWidth), vh = Math.max(200, window.innerHeight);
+  var portrait = vh > vw * 1.05;
+  document.body.classList.toggle('portrait', portrait);
+
+  // portrait phones get a dedicated thumb zone under the picture
+  var padH = (isTouch && portrait && padBelow) ? clamp(Math.round(vh * 0.28), 170, 300) : 0;
+  document.body.classList.toggle('pad', padH > 0);
+  var gw = vw, gh = Math.max(160, vh - padH);
+
+  var C = CONFIG;
+  var lo = Math.max(gw / C.VIEW_MAX_W, gh / C.VIEW_MAX_H);   // showing the most world
+  var hi = Math.min(gw / C.VIEW_MIN_W, gh / C.VIEW_MIN_H);   // showing the least world
+  var shortSide = Math.min(vw, vh);
+  var want = shortSide < 560 ? hi : gh / C.VIEW_TARGET_H;    // phones: zoom in as far as fair
+  var s = clamp(want, Math.min(lo, hi), hi);
+  if (!(s > 0.05)) s = 1;
+
+  view.scale = s;
+  view.w = Math.max(160, Math.round(gw / s));
+  view.h = Math.max(140, Math.round(gh / s));
+  if (canvas.width !== view.w || canvas.height !== view.h) {
+    canvas.width = view.w; canvas.height = view.h;
+  }
+  canvas.style.width = gw + 'px';
+  canvas.style.height = gh + 'px';
   ctx.imageSmoothingEnabled = false;
+
+  hudScale = clamp(Math.round(view.h / 215), 1, 2);
+  game.voldGap = clamp(Math.round(view.w * CONFIG.VOLD_GAP_FACTOR), 95, 200);
+
+  stage.style.setProperty('--u', s + 'px');
+  stage.style.setProperty('--toolsTop', Math.round((25 * hudScale + 9) * s) + 'px');
+  stage.style.setProperty('--pad', padH + 'px');
+
+  // touch pads: sized from the screen, always well over the 64 px minimum
+  var bs = Math.round(clamp(shortSide * 0.19, 76, 132));
+  var bj = Math.round(bs * 1.2);
+  var gapPx = Math.round(bs * 0.18);
+  var lift = (portrait && padH === 0) ? Math.round(vh * 0.06) : 0;   // overlaid pads sit a bit higher
+  var bottomBase = padH > 0 ? Math.round(padH / 2 - bs / 2) : Math.round(vh * 0.045) + 8 + lift;
+  var bottomJump = padH > 0 ? Math.round(padH / 2 - bj / 2) : Math.round(vh * 0.045) + 4 + lift;
+  var edge = Math.round(clamp(vw * 0.035, 12, 40));
+
+  function place(el, size, left, bottom) {
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    el.style.fontSize = Math.round(size * 0.36) + 'px';
+    el.style.left = left + 'px';
+    el.style.bottom = bottom + 'px';
+  }
+  var jumpLeft = vw - edge - bj;
+  if (game.autoRun) {
+    place(tbtns[2].el, bs, edge, bottomBase);                       // Bremse
+    place(tbtns[3].el, bs, edge + bs + gapPx, bottomBase);          // Ducken
+  } else {
+    place(tbtns[0].el, bs, edge, bottomBase);                       // ◀
+    place(tbtns[1].el, bs, edge + bs + gapPx, bottomBase);          // ▶
+    place(tbtns[3].el, bs, jumpLeft - gapPx - bs, bottomBase);      // Ducken
+  }
+  place(tbtns[4].el, bj, jumpLeft, bottomJump);                     // Springen
+
+  // one-thumb tap zones over the picture (only in Auto-Lauf)
+  // world pixels reserved at the bottom when the pads float over the picture
+  view.inset = (padH === 0 && portrait && isTouch) ? Math.round((bottomJump + bj + 14) / s) : 0;
+
+  zones.length = 0;
+  if (isTouch && game.autoRun) {
+    var zTop = Math.round((25 * hudScale + 14) * s);      // keep the HUD strip tap-free
+    var zBot = padH > 0 ? gh : Math.max(zTop + 40, vh - bottomJump - bj - 10);
+    zones.push({ act: 'duck', r: { left: 0, right: gw * 0.40, top: zTop, bottom: zBot } });
+    zones.push({ act: 'jump', r: { left: gw * 0.40, right: gw, top: zTop, bottom: zBot } });
+  }
+  cacheTouchRects();
 }
-window.addEventListener('resize', resize);
-window.addEventListener('orientationchange', function () { setTimeout(resize, 120); });
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', function () { setTimeout(layout, 150); });
 
 // --- GAME LOOP (fixed timestep + accumulator) ---------------------------
-var lastTs = 0, acc = 0, clock = 0;
+var lastTs = 0, acc = 0, clock = 0, wasPlaying = false;
 
 function frame(ts) {
   requestAnimationFrame(frame);
@@ -2401,6 +2850,12 @@ function frame(ts) {
   }
   if (steps === 6) acc = 0;
 
+  var playing = game.state === ST.PLAY;
+  if (playing !== wasPlaying) {
+    wasPlaying = playing;
+    document.body.classList.toggle('playing', playing);
+    cacheTouchRects();
+  }
   Audio2.tickMusic();
   render(clock);
 }
@@ -2408,12 +2863,17 @@ function frame(ts) {
 // --- BOOT ---------------------------------------------------------------
 function boot() {
   initGraphics();
-  var isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-  if (isTouch) document.body.classList.add('touch');
-  else document.getElementById('hintTouch').style.display = 'none';
+  if (isTouch) {
+    document.body.classList.add('touch');
+    game.autoRun = true;          // one-thumb by default on phones
+  } else {
+    document.getElementById('hintTouch').style.display = 'none';
+  }
   btnSound.textContent = 'Ton an';
   btnPauseTop.style.display = 'none';
-  resize();
+  syncFullscreenUI();
+  syncOptions();
+  layout();
   requestAnimationFrame(frame);
 }
 boot();
